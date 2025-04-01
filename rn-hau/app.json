@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "hau",
-    "slug": "hau",
+    "name": "rn-hau",
+    "slug": "rn-hau",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
