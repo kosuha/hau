@@ -13,6 +13,7 @@ export const colors = {
   light: '#ffffff',
   dark: '#191F28',
   lightTransparent: 'rgba(255, 255, 255, 0.6)',
+  secondaryLight: 'rgba(149, 186, 161, 0.24)',
 };
 
 export const gradients = {

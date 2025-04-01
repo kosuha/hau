@@ -16,7 +16,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const AppNavigator: React.FC = () => {
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Settings">
+      <Stack.Navigator initialRouteName="Main">
         {/* 헤더를 숨기려면 options에 headerShown: false 설정 */}
         <Stack.Screen 
           name="Main" 
@@ -26,7 +26,7 @@ const AppNavigator: React.FC = () => {
         <Stack.Screen 
           name="Settings" 
           component={SettingsScreen} 
-          options={{ title: '설정' }} 
+          options={{ headerShown: false }} 
         />
       </Stack.Navigator>
     </NavigationContainer>
