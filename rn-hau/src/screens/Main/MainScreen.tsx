@@ -4,6 +4,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { gradients, colors } from '../../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { RootStackParamList } from '../../navigation/AppNavigator';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+// 네비게이션 타입 정의
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Main'>;
 
 const SettingsButton: React.FC<{ onPress: () => void }> = ({ onPress }) => {
   return (
@@ -30,7 +35,7 @@ const CallButton: React.FC<{ onPress: () => void }> = ({ onPress }) => {
       <Ionicons name="call" size={24} color={colors.accent} />
       <Text style={{
         color: colors.dark,
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
       }}>지금 통화하기</Text>
     </TouchableOpacity>
@@ -83,8 +88,11 @@ const AlertBox: React.FC<{ onPress: () => void }> = ({ onPress }) => {
 };
 
 const MainScreen: React.FC = () => {
+  const navigation = useNavigation<NavigationProp>();
+
   return (
     <LinearGradient
+      style={{ flex: 1 }}
       colors={gradients.primary as [string, string]}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 0.6 }} 
@@ -92,7 +100,7 @@ const MainScreen: React.FC = () => {
       <SafeAreaProvider>
         <SafeAreaView style={styles.container}>
           <View style={styles.header}>
-            <SettingsButton onPress={() => {}} />
+            <SettingsButton onPress={() => navigation.navigate('Settings')} />
           </View>
           <View style={styles.content}>
             <View style={styles.titleContainer}>
