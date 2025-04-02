@@ -8,8 +8,10 @@ import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-// 네비게이션 타입 정의
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Main'>;
+import { SettingsStackParamList } from '../../navigation/SettingsStackNavigator';
+
+type AppNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Main'>;
+type SettingsNavigationProp = NativeStackNavigationProp<SettingsStackParamList, 'Settings'>;
 
 const SettingsButton: React.FC<{ onPress: () => void }> = ({ onPress }) => {
   return (
@@ -45,7 +47,7 @@ const CallButton: React.FC<{ onPress: () => void }> = ({ onPress }) => {
 
 const AlertBox: React.FC<{ onPress: () => void }> = ({ onPress }) => {
   return (
-    <View style={{
+    <TouchableOpacity onPress={onPress} style={{
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'flex-start',
@@ -84,12 +86,13 @@ const AlertBox: React.FC<{ onPress: () => void }> = ({ onPress }) => {
           fontWeight: 'normal',
         }}>통화하기로 한거 잊지 않으셨죠?</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
 const MainScreen: React.FC = () => {
-  const navigation = useNavigation<NavigationProp>();
+  const appNavigation = useNavigation<AppNavigationProp>();
+  const settingsNavigation = useNavigation<SettingsNavigationProp>();
 
   return (
     <LinearGradient
@@ -101,7 +104,7 @@ const MainScreen: React.FC = () => {
       <SafeAreaProvider>
         <SafeAreaView style={styles.container}>
           <View style={styles.header}>
-            <SettingsButton onPress={() => navigation.navigate('Settings')} />
+            <SettingsButton onPress={() => appNavigation.navigate('SettingsStack')} />
           </View>
           <View style={styles.content}>
             <View style={styles.titleContainer}>
@@ -121,7 +124,9 @@ const MainScreen: React.FC = () => {
                 justifyContent: 'center',
                 gap: 10,
               }}>
-                <AlertBox onPress={() => {}} />
+                <AlertBox onPress={() => {
+                  appNavigation.navigate('SettingsStack', { screen: 'CallTimeSetting' });
+                }} />
               </View>
             </View>
             <View style={styles.buttonContainer}>
@@ -130,7 +135,6 @@ const MainScreen: React.FC = () => {
           </View>
         </SafeAreaView>
       </SafeAreaProvider>
-      <StatusBar style="light" />
     </LinearGradient>
   );
 };

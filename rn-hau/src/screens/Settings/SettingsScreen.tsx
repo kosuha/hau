@@ -2,33 +2,15 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, StyleSheet, ViewStyle, TouchableOpacity, TextStyle } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors, gradients } from '../../styles/theme';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
-import { Ionicons } from '@expo/vector-icons';
+import { SettingsStackParamList } from '../../navigation/SettingsStackNavigator';
+import Header from '../../components/Header';
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Settings'>;
-
-const SettingsHeader = ({ onPress, title }: { onPress: () => void, title?: string }) => {
-  return (
-    <View style={{
-      flexDirection: 'row',
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingHorizontal: 20,
-      height: 60
-    }}>
-      <TouchableOpacity onPress={onPress} style={{ position: 'absolute', left: 20 }}>
-        <Ionicons name="chevron-back" size={24} color="black" />
-      </TouchableOpacity>
-      {title && (
-        <Text style={{ alignSelf: 'center', fontSize: 18, fontWeight: 'bold' }}>{title}</Text>
-      )}
-    </View>
-  );
-};
+type AppNavigationProp = NativeStackNavigationProp<RootStackParamList, 'SettingsStack'>;
+type SettingsNavigationProp = NativeStackNavigationProp<SettingsStackParamList, 'Settings'>;
 
 const SettingsItem = ({ title, onPress }: { title: string, onPress: () => void }) => {
   return (
@@ -39,12 +21,13 @@ const SettingsItem = ({ title, onPress }: { title: string, onPress: () => void }
 };
 
 const SettingsScreen = () => {
-  const navigation = useNavigation<NavigationProp>();
+  const appNavigation = useNavigation<AppNavigationProp>();
+  const settingsNavigation = useNavigation<SettingsNavigationProp>();
 
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        <SettingsHeader onPress={() => navigation.goBack()} />
+        <Header onPress={() => appNavigation.goBack()} />
         <View style={styles.content}>
           <View style={{
             flexDirection: 'row',
@@ -68,9 +51,9 @@ const SettingsScreen = () => {
               <View style={styles.divider} />
             </View>
             <View style={styles.menu}>
-              <SettingsItem title="프로필" onPress={() => {}} />
-              <SettingsItem title="통화 시간 설정" onPress={() => {}} />
-              <SettingsItem title="목소리 설정" onPress={() => {}} />
+              <SettingsItem title="프로필" onPress={() => settingsNavigation.navigate('Profile')} />
+              <SettingsItem title="통화 시간 설정" onPress={() => settingsNavigation.navigate('CallTimeSetting')} />
+              <SettingsItem title="목소리 설정" onPress={() => settingsNavigation.navigate('VoiceSetting')} />
             </View>
           </View>
 
@@ -82,10 +65,10 @@ const SettingsScreen = () => {
               <View style={styles.divider} />
             </View>
             <View style={styles.menu}>
-              <SettingsItem title="오픈소스 라이브러리" onPress={() => {}} />
-              <SettingsItem title="문의하기" onPress={() => {}} />
-              <SettingsItem title="이용약관" onPress={() => {}} />
-              <SettingsItem title="개인정보처리방침" onPress={() => {}} />
+              <SettingsItem title="오픈소스 라이브러리" onPress={() => settingsNavigation.navigate('OpenSource')} />
+              <SettingsItem title="문의하기" onPress={() => settingsNavigation.navigate('Inquiry')} />
+              <SettingsItem title="이용약관" onPress={() => settingsNavigation.navigate('TermsOfService')} />
+              <SettingsItem title="개인정보처리방침" onPress={() => settingsNavigation.navigate('PrivacyPolicy')} />
             </View>
           </View>
 
