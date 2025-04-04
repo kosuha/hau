@@ -23,7 +23,6 @@ const AppNavigator: React.FC = () => {
   return (
     <NavigationContainer>
       <Stack.Navigator initialRouteName="OnboardingStack">
-        {/* 헤더를 숨기려면 options에 headerShown: false 설정 */}
         <Stack.Screen 
           name="Main" 
           component={MainScreen} 

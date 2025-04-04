@@ -1,6 +1,5 @@
 import React from 'react';
 import { Text, StyleSheet, View, ViewStyle, TextStyle, TouchableOpacity } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { gradients, colors } from '../../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
