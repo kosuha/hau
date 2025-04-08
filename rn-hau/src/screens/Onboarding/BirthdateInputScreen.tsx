@@ -1,4 +1,4 @@
-import { View, Text, ViewStyle, TextStyle, TextInput, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, ViewStyle, TextStyle, TouchableOpacity, Platform } from 'react-native';
 import Header from '../../components/Header';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';

@@ -39,8 +39,8 @@ const SettingsScreen = () => {
             borderRadius: 16,
             width: '100%',
           }}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold' }}>나의 멤버십</Text>
-            <Text style={{ fontSize: 14 }}>1개월</Text>
+            <Text style={{ fontSize: 16 }}>나의 멤버십</Text>
+            <Text style={{ fontSize: 16, fontWeight: 'bold' }}>무료</Text>
           </View>
           
           <View style={{

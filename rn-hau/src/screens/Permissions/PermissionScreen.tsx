@@ -58,27 +58,27 @@ const PermissionScreen = () => {
           </View>
           <View>
             <TouchableOpacity 
-                style={{
-                  backgroundColor: colors.primary,
-                  padding: 16,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  flexDirection: 'row',
-                  gap: 6,
-                  height: 56,
-                  marginBottom: 37,
-                }} 
-                onPress={() => AppNavigation.navigate('Main')}
-              >
-                <Text style={{
-                  color: colors.light,
-                  fontSize: 16,
-                  fontWeight: 'bold',
-                }}>승인하기</Text>
-              </TouchableOpacity>
-            </View>
+              style={{
+                backgroundColor: colors.primary,
+                padding: 16,
+                borderRadius: 999,
+                borderWidth: 1,
+                justifyContent: 'center',
+                alignItems: 'center',
+                flexDirection: 'row',
+                gap: 6,
+                height: 56,
+                marginBottom: 37,
+              }} 
+              onPress={() => AppNavigation.navigate('Main')}
+            >
+              <Text style={{
+                color: colors.light,
+                fontSize: 16,
+                fontWeight: 'bold',
+              }}>승인하기</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     </SafeAreaProvider>

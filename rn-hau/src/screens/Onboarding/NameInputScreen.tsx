@@ -14,7 +14,7 @@ const NameInputScreen = () => {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        <Header onPress={() => onboardingNavigation.goBack()} />
+        <Header />
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1, width: '100%' }}
