@@ -79,11 +79,11 @@ const AlertBox: React.FC<{ onPress: () => void }> = ({ onPress }) => {
           fontSize: 16,
           fontWeight: 'bold',
           color: colors.dark,
-        }}>오늘 오후 10시</Text>
+        }}>언제 통화할까요?</Text>
         <Text style={{
           fontSize: 16,
           fontWeight: 'normal',
-        }}>통화하기로 한거 잊지 않으셨죠?</Text>
+        }}>원하는 시간을 알려주세요.</Text>
       </View>
     </TouchableOpacity>
   );

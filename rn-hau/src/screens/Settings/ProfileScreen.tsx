@@ -110,15 +110,15 @@ const ProfileScreen = () => {
                 marginBottom: 37,
               }} 
               onPress={() => {}}
-            >
+            > 
               <Text style={{
                 color: colors.light,
                 fontSize: 16,
                 fontWeight: 'bold',
               }}>저장하기</Text>
             </TouchableOpacity>
-            </View>
-            </View>
+          </View>
+        </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>

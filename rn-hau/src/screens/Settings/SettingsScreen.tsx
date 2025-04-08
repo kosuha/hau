@@ -114,7 +114,7 @@ const styles = StyleSheet.create<Style>({
   },
   menu: {
     flexDirection: 'column',
-    gap: 20,
+    gap: 24,
     width: '100%',
   },
   divider: {
