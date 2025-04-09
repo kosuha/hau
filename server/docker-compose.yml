@@ -1,0 +1,10 @@
+version: '3'
+services:
+  websocket:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+    environment:
+      - NODE_ENV=development
