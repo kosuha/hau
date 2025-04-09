@@ -5,7 +5,7 @@ const PORT = process.env.PORT || 3000;
 const requestHandler = (req, res) => {
   console.log(`요청 URL: ${req.url}`);
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Hello, Node.js Server!\n');
+  res.end('Hello, Server!\n');
 };
 
 const server = http.createServer(requestHandler);
