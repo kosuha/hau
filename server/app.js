@@ -11,5 +11,5 @@ const requestHandler = (req, res) => {
 const server = http.createServer(requestHandler);
 
 server.listen(PORT, () => {
-  console.log(`서버가 포트 ${PORT}에서 실행 중입니다.`);
+  console.log(`서버가 포트 ${PORT}에서 실행 중입니다!`);
 });
