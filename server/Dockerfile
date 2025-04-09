@@ -1,7 +1,7 @@
 # Dockerfile
 
 # Node.js 경량 이미지를 사용 (예: node:14-alpine)
-FROM node:14-alpine
+FROM node:22-alpine
 
 # 작업 디렉토리 생성
 WORKDIR /app
