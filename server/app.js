@@ -3,6 +3,7 @@ const http = require('http');
 const PORT = process.env.PORT || 3000;
 
 const requestHandler = (req, res) => {
+  console.log("배포 테스트");
   console.log(`요청 URL: ${req.url}`);
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Hello, World!\n');
