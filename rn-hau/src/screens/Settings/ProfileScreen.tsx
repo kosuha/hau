@@ -6,13 +6,39 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../styles/theme';
 import { useState } from 'react';
+import { useUser } from '../../context/UserContext';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import Modal from 'react-native-modal';
 
 type SettingsNavigationProp = NativeStackNavigationProp<SettingsStackParamList, 'Profile'>;
 
 const ProfileScreen = () => {
   const settingsNavigation = useNavigation<SettingsNavigationProp>();
-  const [text, setText] = useState('');
   const maxLength = 2000;
+  const { userData, updateUserData } = useUser();
+  
+  const [selectedDate, setSelectedDate] = useState(userData.birthdate || new Date());
+  const [name, setName] = useState(userData.name || '');
+  const [selfStory, setSelfStory] = useState(userData.selfStory || '');
+  
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const onChangeDate = (event: DateTimePickerEvent, date?: Date) => {
+    if (date) {
+      setSelectedDate(date);
+      if (Platform.OS === 'android') {
+        setShowDatePicker(false);
+      }
+    } else {
+      if (Platform.OS === 'android') {
+        setShowDatePicker(false);
+      }
+    }
+  };
+
+  const closeDatePickerModal = () => {
+    setShowDatePicker(false);
+  };
 
   return (
     <SafeAreaProvider>
@@ -37,18 +63,23 @@ const ProfileScreen = () => {
           <View style={{ gap: 34 }}>
             <View style={{ gap: 8 }}>
               <Text style={styles.inputTitle}>이름</Text>
-              <TextInput style={{
-                borderWidth: 1,
-                borderColor: 'gray',
-                borderRadius: 14,
-                paddingHorizontal: 20,
-                height: 50,
-                fontSize: 16,
+              <TextInput 
+                value={name}
+                onChangeText={setName}
+                style={{
+                  borderWidth: 1,
+                  borderColor: 'gray',
+                  borderRadius: 14,
+                  paddingHorizontal: 20,
+                  height: 50,
+                  fontSize: 16,
               }} />
             </View>
             <View style={{ gap: 8 }}>
               <Text style={styles.inputTitle}>생년월일</Text>
-              <TouchableOpacity style={{
+              <TouchableOpacity onPress={() => {
+                setShowDatePicker(true);
+              }} style={{
                 borderWidth: 1,
                 borderColor: 'gray',
                 borderRadius: 14,
@@ -59,8 +90,30 @@ const ProfileScreen = () => {
               }}>
                 <Text style={{
                   fontSize: 16,
-                }}>1990.01.01</Text>
+                }}>{selectedDate.toLocaleDateString('ko-KR')}</Text>
               </TouchableOpacity>
+              <Modal
+                isVisible={showDatePicker}
+                onBackdropPress={closeDatePickerModal}
+                onSwipeComplete={closeDatePickerModal}
+                swipeDirection="down"
+                style={styles.bottomSheetModal}
+              >
+                <View style={styles.modalContent}>
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={onChangeDate}
+                    locale="ko-KR"
+                  />
+                  {Platform.OS === 'ios' && (
+                    <TouchableOpacity onPress={closeDatePickerModal} style={styles.confirmButton}>
+                       <Text style={styles.confirmButtonText}>확인</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </Modal>
             </View>
             <View style={{ gap: 8 }}>
               <Text style={styles.inputTitle}>나의 이야기</Text>
@@ -76,12 +129,12 @@ const ProfileScreen = () => {
                   numberOfLines={8}
                   maxLength={maxLength}
                   textAlignVertical="top"
-                  value={text}
-                  onChangeText={setText}
+                  value={selfStory}
+                  onChangeText={setSelfStory}
                 />
                 <View style={styles.characterCount}>
                   <Text style={styles.characterCountText}>
-                    {text.length}/{maxLength}
+                    {selfStory.length}/{maxLength}
                   </Text>
                 </View>
               </View>
@@ -109,7 +162,14 @@ const ProfileScreen = () => {
                 height: 56,
                 marginBottom: 37,
               }} 
-              onPress={() => {}}
+              onPress={() => {
+                updateUserData({
+                  name: name,
+                  birthdate: selectedDate,
+                  selfStory: selfStory,
+                });
+                settingsNavigation.goBack();
+              }}
             > 
               <Text style={{
                 color: colors.light,
@@ -137,6 +197,10 @@ interface Style {
   input: TextStyle;
   characterCount: ViewStyle;
   characterCountText: TextStyle;
+  bottomSheetModal: ViewStyle;
+  modalContent: ViewStyle;
+  confirmButton: ViewStyle;
+  confirmButtonText: TextStyle;
 }
 
 const styles: Style = {
@@ -146,6 +210,7 @@ const styles: Style = {
     gap: 16,
     justifyContent: 'flex-start',
     alignItems: 'flex-start',
+    backgroundColor: colors.light,
   },
   content: {
     flex: 1,
@@ -155,7 +220,7 @@ const styles: Style = {
   },
   inputTitle: {
     fontSize: 16,
-    fontWeight: 'medium',
+    fontWeight: '500',
   },
   logoutContainer: {
     flexDirection: 'row',
@@ -195,6 +260,34 @@ const styles: Style = {
   characterCountText: {
     fontSize: 12,
     color: colors.disabled,
+  },
+  bottomSheetModal: {
+    justifyContent: 'flex-end',
+    margin: 0,
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    gap: 20,
+  },
+  confirmButton: {
+    backgroundColor: colors.primary,
+    padding: 16,
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    height: 56,
+    marginBottom: 20,
+  },
+  confirmButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 };
 

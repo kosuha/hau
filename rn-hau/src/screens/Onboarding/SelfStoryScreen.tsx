@@ -7,6 +7,7 @@ import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
 import { colors } from '../../styles/theme';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useState } from 'react';
+import { useUser } from '../../context/UserContext';
 
 type AppNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Main'>;
 type OnboardingNavigationProp = NativeStackNavigationProp<OnboardingStackParamList, 'SelfStory'>;
@@ -14,7 +15,8 @@ type OnboardingNavigationProp = NativeStackNavigationProp<OnboardingStackParamLi
 const SelfStoryScreen = () => {
   const onboardingNavigation = useNavigation<OnboardingNavigationProp>();
   const appNavigation = useNavigation<AppNavigationProp>();
-  const [text, setText] = useState('');
+  const { userData, updateUserData } = useUser();
+  const [text, setText] = useState(userData.selfStory || '');
   const maxLength = 2000;
 
   return (
@@ -76,7 +78,12 @@ const SelfStoryScreen = () => {
                     height: 56,
                     marginBottom: 37,
                   }} 
-                  onPress={() => appNavigation.navigate('Permission')}
+                  onPress={() => {
+                    // TODO: 이야기 유효성 검사
+                    
+                    updateUserData({ selfStory: text });
+                    appNavigation.navigate('Permission');
+                  }}
                 >
                   <Text style={{
                     color: colors.light,

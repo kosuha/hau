@@ -5,11 +5,15 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
 import { colors } from '../../styles/theme';
+import { useUser } from '../../context/UserContext';
+import { useState } from 'react';
 
 type OnboardingNavigationProp = NativeStackNavigationProp<OnboardingStackParamList, 'BirthdateInput'>;
 
 const NameInputScreen = () => {
   const onboardingNavigation = useNavigation<OnboardingNavigationProp>();
+  const { userData, updateUserData } = useUser();
+  const [name, setName] = useState(userData.name || '');
 
   return (
     <SafeAreaProvider>
@@ -37,6 +41,8 @@ const NameInputScreen = () => {
                 </View>
                 <View style={styles.inputContainer}>
                   <TextInput
+                    value={name}
+                    onChangeText={setName}
                     style={styles.input}
                     placeholder="이름 입력 (최대 12자)"
                     maxLength={12} 
@@ -57,7 +63,12 @@ const NameInputScreen = () => {
                     height: 56,
                     marginBottom: 37,
                   }} 
-                  onPress={() => onboardingNavigation.navigate('BirthdateInput')}
+                  onPress={() => {
+                    // TODO: 이름 유효성 검사
+                    
+                    updateUserData({ name: name });
+                    onboardingNavigation.navigate('BirthdateInput');
+                  }}
                 >
                   <Text style={{
                     color: colors.light,

@@ -7,16 +7,19 @@ import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
 import { colors } from '../../styles/theme';
 import { useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useUser } from '../../context/UserContext';
 
 type OnboardingNavigationProp = NativeStackNavigationProp<OnboardingStackParamList, 'BirthdateInput'>;
 
 const BirthdateInputScreen = () => {
+  const { userData, updateUserData } = useUser();
   const onboardingNavigation = useNavigation<OnboardingNavigationProp>();
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(userData.birthdate || new Date());
 
   const onChange = (event: any, selectedDate?: Date) => {
     const currentDate = selectedDate || new Date();
     setSelectedDate(currentDate);
+    updateUserData({ birthdate: currentDate });
   };
 
   return (
@@ -38,7 +41,7 @@ const BirthdateInputScreen = () => {
               marginTop: 20,
             }}>
               <DateTimePicker
-                value={selectedDate}
+                value={selectedDate || new Date()}
                 mode="date"
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={onChange}
@@ -60,7 +63,12 @@ const BirthdateInputScreen = () => {
                 height: 56,
                 marginBottom: 37,
               }} 
-              onPress={() => onboardingNavigation.navigate('SelfStory')}
+              onPress={() => {
+                // TODO: 생년월일 유효성 검사
+                
+                updateUserData({ birthdate: selectedDate });
+                onboardingNavigation.navigate('SelfStory');
+              }}
             >
               <Text style={{
                 color: colors.light,

@@ -6,6 +6,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../styles/theme';
 import { useState } from 'react';
+import { useUser } from '../../context/UserContext';
 
 type SettingsNavigationProp = NativeStackNavigationProp<SettingsStackParamList, 'CallTimeSetting'>;
 
@@ -41,7 +42,8 @@ const VoiceItem = ({ title, description, selected, onPress }: { title: string, d
 };
 const VoiceSettingScreen = () => {
   const settingsNavigation = useNavigation<SettingsNavigationProp>();
-  const [selectedVoice, setSelectedVoice] = useState<string>('선호');
+  const { userData, updateUserData } = useUser();
+  const [selectedVoice, setSelectedVoice] = useState<string>(userData.voice || 'Beomsoo');
   
   return (
     <SafeAreaProvider>
@@ -61,8 +63,8 @@ const VoiceSettingScreen = () => {
               fontWeight: 'medium',
             }}>원하는 목소리로 통화할 수 있어요.</Text>
             <View style={{ gap: 20 }}>
-              <VoiceItem title="범수" description="자상하고 차분한 남자 목소리" selected={selectedVoice === '선호'} onPress={() => setSelectedVoice('선호')} />
-              <VoiceItem title="진주" description="친절하고 밝은 여자 목소리" selected={selectedVoice === '주연'} onPress={() => setSelectedVoice('주연')} />
+              <VoiceItem title="범수" description="자상하고 차분한 남자 목소리" selected={selectedVoice === 'Beomsoo'} onPress={() => setSelectedVoice('Beomsoo')} />
+              <VoiceItem title="진주" description="친절하고 밝은 여자 목소리" selected={selectedVoice === 'Jinjoo'} onPress={() => setSelectedVoice('Jinjoo')} />
             </View>
           </View>
           <View>
@@ -79,7 +81,10 @@ const VoiceSettingScreen = () => {
                 height: 56,
                 marginBottom: 37,
               }} 
-              onPress={() => {}}
+              onPress={() => {
+                updateUserData({ voice: selectedVoice });
+                settingsNavigation.goBack();
+              }}
             > 
               <Text style={{
                 color: colors.light,

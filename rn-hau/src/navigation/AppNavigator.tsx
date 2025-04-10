@@ -8,6 +8,7 @@ import SettingsStackNavigator, { SettingsStackParamList } from './SettingsStackN
 import OnboardingNavigator, { OnboardingStackParamList } from './OnboardingNavigator';
 import PermissionScreen from '../screens/Permissions/PermissionScreen';
 import LoginScreen from '../screens/Login/LoginScreen';
+import { UserProvider } from '../context/UserContext';
 
 export type RootStackParamList = {
   Main: undefined;
@@ -21,35 +22,37 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const AppNavigator: React.FC = () => {
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="Main">
-        <Stack.Screen 
-          name="Main" 
-          component={MainScreen} 
-          options={{ headerShown: false }} 
-        />
-        <Stack.Screen 
-          name="SettingsStack" 
-          component={SettingsStackNavigator} 
-          options={{ headerShown: false }} 
-        />
-        <Stack.Screen 
-          name="OnboardingStack" 
-          component={OnboardingNavigator} 
-          options={{ headerShown: false }} 
-        />
-        <Stack.Screen 
-          name="Login" 
-          component={LoginScreen} 
-          options={{ headerShown: false }} 
-        />
-        <Stack.Screen 
-          name="Permission" 
-          component={PermissionScreen} 
-          options={{ headerShown: false }} 
-        />  
-      </Stack.Navigator>
-    </NavigationContainer>
+    <UserProvider>
+      <NavigationContainer>
+        <Stack.Navigator initialRouteName="OnboardingStack">
+          <Stack.Screen 
+            name="Main" 
+            component={MainScreen} 
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="SettingsStack" 
+            component={SettingsStackNavigator} 
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="OnboardingStack" 
+            component={OnboardingNavigator} 
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="Login" 
+            component={LoginScreen} 
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="Permission" 
+            component={PermissionScreen} 
+            options={{ headerShown: false }} 
+          />  
+        </Stack.Navigator>
+      </NavigationContainer>
+    </UserProvider>
   );
 };
 
