@@ -7,10 +7,8 @@ import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { SettingsStackParamList } from '../../navigation/SettingsStackNavigator';
 
 type AppNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Main'>;
-type SettingsNavigationProp = NativeStackNavigationProp<SettingsStackParamList, 'Settings'>;
 
 const SettingsButton: React.FC<{ onPress: () => void }> = ({ onPress }) => {
   return (
@@ -89,9 +87,12 @@ const AlertBox: React.FC<{ onPress: () => void }> = ({ onPress }) => {
   );
 };
 
+const callEvent = () => {
+  // TODO: 통화 이벤트 처리
+};
+
 const MainScreen: React.FC = () => {
   const appNavigation = useNavigation<AppNavigationProp>();
-  const settingsNavigation = useNavigation<SettingsNavigationProp>();
 
   return (
     <LinearGradient
