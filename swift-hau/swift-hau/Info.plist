@@ -7,6 +7,18 @@
 		<string>audio</string>
 		<string>remote-notification</string>
 		<string>voip</string>
+		<string>processing</string>
+	</array>
+
+	<key>PKPushUsageDescription</key>
+	<string>통화 알림을 받기 위해 푸시 알림을 사용합니다.</string>
+
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>이 앱은 통화 기능 테스트를 위해 로컬 네트워크에 접근해야 합니다.</string>
+
+	<key>NSBonjourServices</key>
+	<array>
+			<string>_http._tcp</string>
 	</array>
 </dict>
 </plist>

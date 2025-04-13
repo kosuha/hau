@@ -9,8 +9,9 @@ import SwiftUI
 
 @main
 struct HAUApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var userViewModel = UserViewModel()
-    
+
     var body: some Scene {
         WindowGroup {
             MainView()
