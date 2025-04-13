@@ -10,6 +10,7 @@ import SwiftUI
 struct MainView: View {
     @EnvironmentObject var userViewModel: UserViewModel
     @State private var navigationPath = NavigationPath()
+    @ObservedObject private var callManager = CallManager.shared
     
     enum Destination: Hashable {
         case settings
@@ -83,7 +84,9 @@ struct MainView: View {
                         Spacer()
                         
                         // 통화 버튼
-                        Button(action: { navigationPath.append(Destination.call) }) {
+                        Button(action: { 
+                            callManager.requestCallPush(receiverID: "test_id")
+                        }) {
                             HStack(spacing: 10) {
                                 Image(systemName: "phone.fill")
                                     .font(.system(size: 24))
@@ -120,7 +123,30 @@ struct MainView: View {
                     CallTimeSettingView()
                 }
             }
+            .onAppear {
+                // 앱이 시작될 때 통화 상태 확인
+                if callManager.shouldShowCallScreen {
+                    navigationPath.append(Destination.call)
+                }
+                
+                // 통화 화면 표시 알림 감지
+                setupCallScreenObserver()
+            }
         }
+    }
+    
+    private func setupCallScreenObserver() {
+        // 기존 옵저버 제거 (중복 방지)
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("ShowCallScreen"), object: nil)
         
+        // 새 옵저버 등록
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ShowCallScreen"),
+            object: nil,
+            queue: .main) { _ in
+                DispatchQueue.main.async {
+                    navigationPath.append(Destination.call)
+                }
+            }
     }
 }

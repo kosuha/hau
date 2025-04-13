@@ -1,6 +1,7 @@
 import UIKit
 import PushKit
 import CallKit
+import AVFoundation
 
 class AppDelegate: NSObject, UIApplicationDelegate, PKPushRegistryDelegate {
     // CallManager 싱글톤 인스턴스 참조
@@ -40,6 +41,13 @@ class AppDelegate: NSObject, UIApplicationDelegate, PKPushRegistryDelegate {
     func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
         print("AppDelegate: VoIP 푸시 수신: \(payload.dictionaryPayload)")
         
+        // 이미 통화 중이면 새 푸시 무시
+        if callManager.isCallInProgress {
+            print("AppDelegate: 이미 통화 중이거나 알림이 진행 중입니다. 새 VoIP 푸시 무시")
+            completion()
+            return
+        }
+        
         // VoIP 푸시 알림 수신
         if type == .voIP {
             // 페이로드에서 필요한 정보 추출
@@ -55,6 +63,30 @@ class AppDelegate: NSObject, UIApplicationDelegate, PKPushRegistryDelegate {
             print("AppDelegate: 통화 UI 표시 시도")
             callManager.reportIncomingCall(uuid: uuid, handle: handle)
             completion()
+        }
+    }
+    
+    // iOS 13 이상에서 VoIP 푸시 처리를 위한 메서드
+    func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType) {
+        print("AppDelegate: iOS 13+ VoIP 푸시 수신 (completion 없음)")
+        
+        // 이미 통화 중이면 새 푸시 무시
+        if callManager.isCallInProgress {
+            print("AppDelegate: 이미 통화 중이거나 알림이 진행 중입니다. 새 VoIP 푸시 무시")
+            return
+        }
+        
+        // VoIP 푸시 알림 처리 (iOS 13 이상)
+        if type == .voIP {
+            guard let uuidString = payload.dictionaryPayload["uuid"] as? String,
+                  let uuid = UUID(uuidString: uuidString),
+                  let handle = payload.dictionaryPayload["handle"] as? String else {
+                print("AppDelegate: 푸시 페이로드에서 필요한 정보를 찾을 수 없습니다.")
+                return
+            }
+            
+            // iOS 13 이상에서는 반드시 이 메서드에서 CallKit을 보여줘야 함
+            callManager.reportIncomingCall(uuid: uuid, handle: handle)
         }
     }
 }

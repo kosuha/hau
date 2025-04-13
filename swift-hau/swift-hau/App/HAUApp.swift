@@ -16,6 +16,10 @@ struct HAUApp: App {
         WindowGroup {
             MainView()
                 .environmentObject(userViewModel)
+                .onAppear {
+                    // 앱이 시작될 때 CallManager 설정
+                    CallManager.shared.setupVoIP()
+                }
         }
     }
 }

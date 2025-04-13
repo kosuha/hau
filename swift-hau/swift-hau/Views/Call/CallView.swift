@@ -12,21 +12,11 @@ import AVFoundation
 
 struct CallView: View {
     @StateObject private var callManager = CallManager.shared
-    
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
         VStack {
-            Text("call 화면")
-                .navigationBarTitle("call", displayMode: .inline)
-            
-            Button("수신 전화 시뮬레이션") {
-                callManager.simulateIncomingCall()
-            }
-
-            Button("수신 전화 요청") {
-                callManager.requestCallPush(receiverID: "test_id")
-            }
-            
-            if callManager.isCallActive {
+            if callManager.shouldShowCallScreen {
                 VStack(spacing: 20) {
                     Text("통화 중...")
                         .font(.title)
@@ -34,6 +24,7 @@ struct CallView: View {
                     
                     Button("통화 종료") {
                         callManager.endCall()
+                        dismiss()
                     }
                     .padding()
                     .background(Color.red)
@@ -41,8 +32,14 @@ struct CallView: View {
                     .cornerRadius(10)
                 }
                 .padding()
+            } else {
+                Text("통화 종료")
+                Button("돌아가기") {
+                    dismiss()
+                }
             }
         }
+        .navigationBarHidden(true)
     }
 }
 

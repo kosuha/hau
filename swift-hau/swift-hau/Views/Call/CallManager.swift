@@ -1,10 +1,13 @@
 import SwiftUI
 import PushKit
 import CallKit
+import AVFoundation
 
 // CallKit과 PushKit을 관리하는 클래스
 class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistryDelegate {
     @Published var isCallActive = false
+    @Published var shouldShowCallScreen = false
+    @Published var isCallInProgress = false  // 통화 중 또는 통화 알림 진행 중 상태 추적
     
     // 싱글톤 인스턴스
     static let shared = CallManager()
@@ -51,7 +54,15 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     // 수신 전화 보고
     func reportIncomingCall(uuid: UUID, handle: String, hasVideo: Bool = false, completion: ((Bool) -> Void)? = nil) {
+        // 이미 통화 중이거나 알림이 진행 중이면 새 통화 거부
+        if isCallInProgress {
+            print("이미 통화 중이거나, 통화 알림이 진행 중입니다. 새 통화 요청 무시")
+            completion?(false)
+            return
+        }
+        
         self.uuid = uuid
+        isCallInProgress = true  // 통화 알림 진행 중으로 상태 설정
         
         // 통화 업데이트 설정
         let update = CXCallUpdate()
@@ -64,6 +75,7 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
             if let error = error {
                 print("수신 전화 표시 오류: \(error.localizedDescription)")
                 self.isCallActive = false
+                self.isCallInProgress = false  // 오류 발생 시 상태 초기화
                 completion?(false)
                 return
             }
@@ -85,6 +97,8 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
             } else {
                 print("통화 종료 성공")
                 self.isCallActive = false
+                self.shouldShowCallScreen = false
+                self.isCallInProgress = false  // 통화 종료 시 상태 초기화
             }
         }
     }
@@ -199,18 +213,58 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     func providerDidReset(_ provider: CXProvider) {
         // 제공자가 재설정되었을 때 호출됨
         isCallActive = false
+        shouldShowCallScreen = false
+        isCallInProgress = false  // 상태 초기화
     }
     
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
         // 사용자가 전화를 받았을 때
         isCallActive = true
+        shouldShowCallScreen = true
+        isCallInProgress = true  // 통화 중 상태 설정
+        
+        // 메인 스레드에서 UI 업데이트 확보
+        DispatchQueue.main.async {
+            self.navigateToCallScreen()
+        }
+        
         action.fulfill()
     }
     
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         // 사용자가 전화를 종료했을 때
         isCallActive = false
+        shouldShowCallScreen = false
+        isCallInProgress = false  // 상태 초기화
         action.fulfill()
+    }
+    
+    // 통화가 활성화될 때 (오디오 세션 관련)
+    func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        // 오디오 세션이 활성화되었을 때
+        print("오디오 세션 활성화됨")
+    }
+    
+    func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+        // 오디오 세션이 비활성화되었을 때
+        print("오디오 세션 비활성화됨")
+    }
+    
+    // 사용자가 통화를 거부했을 때 (통화 UI에서 "거부" 버튼을 누른 경우)
+    // CXRejectCallAction은 존재하지 않으므로 대신 didRejectIncomingCall을 사용
+    func provider(_ provider: CXProvider, didReject callUUID: UUID) {
+        print("통화 거부됨")
+        isCallActive = false
+        shouldShowCallScreen = false
+        isCallInProgress = false  // 상태 초기화
+    }
+    
+    // 통화 화면으로 이동하는 메서드
+    private func navigateToCallScreen() {
+        // NotificationCenter를 통해 앱 내에서 통화 화면 전환 알림
+        NotificationCenter.default.post(name: NSNotification.Name("ShowCallScreen"), object: nil)
+        
+        print("통화 화면으로 이동 요청됨")
     }
     
     // MARK: - PKPushRegistryDelegate
