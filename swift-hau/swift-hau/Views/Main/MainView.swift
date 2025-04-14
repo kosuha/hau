@@ -12,6 +12,7 @@ struct MainView: View {
     @State private var navigationPath = NavigationPath()
     @ObservedObject private var callManager = CallManager.shared
     @State private var showCallViewAsSheet = false
+    @State private var showCallRequestAlert = false
     
     enum Destination: Hashable {
         case settings
@@ -86,6 +87,7 @@ struct MainView: View {
                         // 통화 버튼
                         Button(action: { 
                             callManager.requestCallPush(receiverID: "test_id")
+                            showCallRequestAlert = true
                         }) {
                             HStack(spacing: 10) {
                                 Image(systemName: "phone.fill")
@@ -126,6 +128,11 @@ struct MainView: View {
             } content: {
                 CallView()
                     .id(callManager.callScreenPresentationID)
+            }
+            .alert("통화 요청 완료", isPresented: $showCallRequestAlert) {
+                Button("확인", role: .cancel) { }
+            } message: {
+                Text("곧 전화가 올거에요, 전화를 받아주세요!")
             }
             .onAppear {
                 if callManager.shouldShowCallScreen {
