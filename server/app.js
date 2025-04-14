@@ -74,6 +74,8 @@ fastify.get('/api/v1/realtime/sessions', async (request, reply) => {
     model: 'gpt-4o-mini-realtime-preview',
     modalities: ['audio', 'text'],
     instructions: prompt,
+    // 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', and 'verse'
+    voice: 'ash',
   };
   const headers = {
     'Authorization': `Bearer ${apiKey}`,
