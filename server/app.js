@@ -58,7 +58,7 @@ fastify.get('/', async (request, reply) => {
 });
 
 // OpenAI API 세션 생성 엔드포인트
-fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
+fastify.get('/api/v1/realtime/sessions', async (request, reply) => {
   // OpenAI API 키 환경 변수에서 가져오기
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -66,12 +66,14 @@ fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
     return;
   }
 
+  const prompt = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf8');
+
   // OpenAI API 엔드포인트 및 요청 데이터
   const url = 'https://api.openai.com/v1/realtime/sessions';
   const data = {
     model: 'gpt-4o-mini-realtime-preview',
     modalities: ['audio', 'text'],
-    instructions: 'You are a friendly assistant.',
+    instructions: prompt,
   };
   const headers = {
     'Authorization': `Bearer ${apiKey}`,

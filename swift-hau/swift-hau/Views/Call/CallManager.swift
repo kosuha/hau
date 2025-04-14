@@ -99,6 +99,11 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
                 self.isCallActive = false
                 self.shouldShowCallScreen = false
                 self.isCallInProgress = false  // 통화 종료 시 상태 초기화
+                
+                // AI 연결도 종료
+                if RealtimeAIConnection.shared.isConnected {
+                    RealtimeAIConnection.shared.disconnect()
+                }
             }
         }
     }

@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		8E178D3B2DAC6D17007E8F9C /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 8E178D3A2DAC6D17007E8F9C /* WebRTC */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		8EDF8FEB2DA8E78200446E23 /* swift-hau.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "swift-hau.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -36,6 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8E178D3B2DAC6D17007E8F9C /* WebRTC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +83,7 @@
 			);
 			name = "swift-hau";
 			packageProductDependencies = (
+				8E178D3A2DAC6D17007E8F9C /* WebRTC */,
 			);
 			productName = "swift-hau";
 			productReference = 8EDF8FEB2DA8E78200446E23 /* swift-hau.app */;
@@ -107,6 +113,9 @@
 			);
 			mainGroup = 8EDF8FE22DA8E78200446E23;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				8E178D392DAC6D17007E8F9C /* XCRemoteSwiftPackageReference "WebRTC" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8EDF8FEC2DA8E78200446E23 /* Products */;
 			projectDirPath = "";
@@ -355,6 +364,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		8E178D392DAC6D17007E8F9C /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 135.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		8E178D3A2DAC6D17007E8F9C /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8E178D392DAC6D17007E8F9C /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 8EDF8FE32DA8E78200446E23 /* Project object */;
 }
