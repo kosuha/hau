@@ -8,6 +8,7 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     @Published var isCallActive = false
     @Published var shouldShowCallScreen = false
     @Published var isCallInProgress = false  // 통화 중 또는 통화 알림 진행 중 상태 추적
+    @Published var callScreenPresentationID = UUID()
     
     // 싱글톤 인스턴스
     static let shared = CallManager()
@@ -96,13 +97,22 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
                 print("통화 종료 오류: \(error.localizedDescription)")
             } else {
                 print("통화 종료 성공")
-                self.isCallActive = false
-                self.shouldShowCallScreen = false
-                self.isCallInProgress = false  // 통화 종료 시 상태 초기화
                 
-                // AI 연결도 종료
-                if RealtimeAIConnection.shared.isConnected {
-                    RealtimeAIConnection.shared.disconnect()
+                // 화면 상태 초기화 먼저 수행
+                self.shouldShowCallScreen = false
+                
+                // 약간의 지연 후 상태 완전 초기화
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.isCallActive = false
+                    self.isCallInProgress = false
+                    
+                    // 화면 스택 정리 알림 전송
+                    NotificationCenter.default.post(name: NSNotification.Name("CleanupCallScreen"), object: nil)
+                    
+                    // AI 연결도 종료
+                    if RealtimeAIConnection.shared.isConnected {
+                        RealtimeAIConnection.shared.disconnect()
+                    }
                 }
             }
         }
@@ -264,11 +274,36 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
         isCallInProgress = false  // 상태 초기화
     }
     
-    // 통화 화면으로 이동하는 메서드
+    // 통화 상태 리셋 메서드 수정
+    func resetCallStatus() {
+        // 통화 관련 상태 초기화 (통화 종료시에만 호출되도록)
+        if isCallActive {
+            isCallActive = false
+            shouldShowCallScreen = false
+            isCallInProgress = false
+            
+            // AI 연결 확실히 종료
+            if RealtimeAIConnection.shared.isConnected {
+                RealtimeAIConnection.shared.disconnect()
+            }
+            
+            // 다음 통화를 위해 UI 상태 정리
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: NSNotification.Name("CleanupCallScreen"), object: nil)
+            }
+        }
+    }
+    
+    // navigateToCallScreen 메서드 수정
     private func navigateToCallScreen() {
+        // 항상 통화 화면을 표시하도록 설정
+        shouldShowCallScreen = true
+        
+        // 새로운 프레젠테이션 ID 생성 (화면 갱신 트리거)
+        callScreenPresentationID = UUID()
+        
         // NotificationCenter를 통해 앱 내에서 통화 화면 전환 알림
         NotificationCenter.default.post(name: NSNotification.Name("ShowCallScreen"), object: nil)
-        
         print("통화 화면으로 이동 요청됨")
     }
     

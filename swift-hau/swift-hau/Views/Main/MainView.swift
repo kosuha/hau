@@ -11,10 +11,10 @@ struct MainView: View {
     @EnvironmentObject var userViewModel: UserViewModel
     @State private var navigationPath = NavigationPath()
     @ObservedObject private var callManager = CallManager.shared
+    @State private var showCallViewAsSheet = false
     
     enum Destination: Hashable {
         case settings
-        case call
         case callTimeSetting
     }
     
@@ -117,35 +117,50 @@ struct MainView: View {
                 switch destination {
                 case .settings:
                     SettingsView()
-                case .call:
-                    CallView()
                 case .callTimeSetting:
                     CallTimeSettingView()
                 }
             }
+            .fullScreenCover(isPresented: $showCallViewAsSheet) {
+                callManager.resetCallStatus()
+            } content: {
+                CallView()
+                    .id(callManager.callScreenPresentationID)
+            }
             .onAppear {
-                // 앱이 시작될 때 통화 상태 확인
                 if callManager.shouldShowCallScreen {
-                    navigationPath.append(Destination.call)
+                    showCallViewAsSheet = true
                 }
                 
-                // 통화 화면 표시 알림 감지
                 setupCallScreenObserver()
+                
+                setupCleanupObserver()
             }
         }
     }
     
     private func setupCallScreenObserver() {
-        // 기존 옵저버 제거 (중복 방지)
         NotificationCenter.default.removeObserver(self, name: NSNotification.Name("ShowCallScreen"), object: nil)
         
-        // 새 옵저버 등록
         NotificationCenter.default.addObserver(
             forName: NSNotification.Name("ShowCallScreen"),
             object: nil,
             queue: .main) { _ in
                 DispatchQueue.main.async {
-                    navigationPath.append(Destination.call)
+                    showCallViewAsSheet = true
+                }
+            }
+    }
+    
+    private func setupCleanupObserver() {
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("CleanupCallScreen"), object: nil)
+        
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("CleanupCallScreen"),
+            object: nil,
+            queue: .main) { _ in
+                DispatchQueue.main.async {
+                    showCallViewAsSheet = false
                 }
             }
     }

@@ -83,6 +83,7 @@ struct CallView: View {
             } else {
                 // 통화가 종료되면 AI 연결도 종료
                 disconnectAI()
+                dismiss()
             }
         }
         .onChange(of: callManager.shouldShowCallScreen) { newValue in
@@ -92,11 +93,15 @@ struct CallView: View {
             } else {
                 disconnectAI()
                 callState = .disconnected
+                dismiss()
             }
         }
         .onDisappear {
             // 화면이 사라질 때도 확실히 연결 종료
             disconnectAI()
+            
+            // 통화 상태 리셋 및 스택 정리
+            callManager.resetCallStatus()
         }
     }
     
