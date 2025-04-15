@@ -118,11 +118,3 @@ struct NameView: View {
         }
     }
 }
-
-// 미리보기
-struct NameInputView_Previews: PreviewProvider {
-    static var previews: some View {
-        NameView(onNext: {})
-            .environmentObject(UserViewModel())
-    }
-}

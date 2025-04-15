@@ -9,7 +9,7 @@ import SwiftUI
 
 struct ProfileView: View {
     @Environment(\.dismiss) var dismiss
-    @StateObject private var viewModel = ProfileViewModel()
+    @EnvironmentObject private var userViewModel: UserViewModel
     @EnvironmentObject private var authViewModel: AuthViewModel
     
     @State private var showDatePicker = false
@@ -23,7 +23,7 @@ struct ProfileView: View {
             HeaderView(
                 onPress: {
                     // 변경 사항이 있으면 경고 표시
-                    if viewModel.isModified {
+                    if userViewModel.isModified {
                         showDiscardAlert = true
                     } else {
                         dismiss()
@@ -39,7 +39,10 @@ struct ProfileView: View {
                         Text("이름")
                             .font(.system(size: 16, weight: .medium))
                         
-                        TextField("이름을 입력하세요", text: $viewModel.name)
+                        TextField("이름을 입력하세요", text: Binding(
+                            get: { userViewModel.userData.name ?? "" },
+                            set: { userViewModel.updateUserData(name: $0) }
+                        ))
                             .padding(.horizontal, 20)
                             .frame(height: 50)
                             .background(Color.white)
@@ -59,7 +62,7 @@ struct ProfileView: View {
                             showDatePicker = true
                         }) {
                             HStack {
-                                Text(viewModel.formattedBirthdate)
+                                Text(userViewModel.formattedBirthdate)
                                     .font(.system(size: 16))
                                     .foregroundColor(AppTheme.Colors.text)
                                 
@@ -86,7 +89,10 @@ struct ProfileView: View {
                             .foregroundColor(AppTheme.Colors.secondary)
                         
                         ZStack(alignment: .bottomTrailing) {
-                            TextEditor(text: $viewModel.selfStory)
+                            TextEditor(text: Binding(
+                                get: { userViewModel.userData.selfIntro ?? "" },
+                                set: { userViewModel.updateUserData(selfStory: $0) }
+                            ))
                                 .padding(20)
                                 .frame(height: 300)
                                 .background(Color.white)
@@ -97,7 +103,7 @@ struct ProfileView: View {
                                 )
                             
                             // 글자 수 표시
-                            Text("\(viewModel.selfStory.count)/\(viewModel.maxLength)")
+                            Text("\((userViewModel.userData.selfIntro ?? "").count)/\(userViewModel.maxLength)")
                                 .font(.system(size: 12))
                                 .foregroundColor(AppTheme.Colors.disabled)
                                 .padding(10)
@@ -130,7 +136,7 @@ struct ProfileView: View {
                     
                     // 저장 버튼
                     Button(action: {
-                        viewModel.saveProfile()
+                        userViewModel.saveProfile()
                         dismiss()
                     }) {
                         Text("저장하기")
@@ -151,7 +157,10 @@ struct ProfileView: View {
         // 날짜 선택 모달
         .sheet(isPresented: $showDatePicker) {
             DatePickerSheet(
-                selectedDate: $viewModel.birthdate,
+                selectedDate: Binding(
+                    get: { userViewModel.userData.birthdate ?? Date() },
+                    set: { userViewModel.updateUserData(birthdate: $0) }
+                ),
                 isPresented: $showDatePicker
             )
         }
@@ -169,7 +178,7 @@ struct ProfileView: View {
         .alert("로그아웃", isPresented: $showLogoutAlert) {
             Button("취소", role: .cancel) { }
             Button("로그아웃", role: .destructive) {
-                viewModel.logout(authViewModel: authViewModel)
+                userViewModel.logout(authViewModel: authViewModel)
             }
         } message: {
             Text("정말 로그아웃 하시겠습니까?")
@@ -179,14 +188,14 @@ struct ProfileView: View {
         .alert("회원탈퇴", isPresented: $showDeleteAccountAlert) {
             Button("취소", role: .cancel) { }
             Button("탈퇴하기", role: .destructive) {
-                viewModel.deleteAccount(authViewModel: authViewModel)
+                userViewModel.deleteAccount(authViewModel: authViewModel)
             }
         } message: {
             Text("모든 계정 정보가 삭제되며 복구할 수 없습니다. 정말 탈퇴하시겠습니까?")
         }
         
         .onAppear {
-            viewModel.loadUserData()
+            userViewModel.beginEditing()
         }
     }
 }
