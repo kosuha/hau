@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		8E178D3B2DAC6D17007E8F9C /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 8E178D3A2DAC6D17007E8F9C /* WebRTC */; };
+		8EB660FD2DAE4EED00FCBA67 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 8EB660FC2DAE4EED00FCBA67 /* Supabase */; };
+		8EB661062DAE5CEC00FCBA67 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 8EB661052DAE5CEC00FCBA67 /* GoogleSignIn */; };
+		8EB661082DAE5CEC00FCBA67 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 8EB661072DAE5CEC00FCBA67 /* GoogleSignInSwift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,7 +43,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8EB660FD2DAE4EED00FCBA67 /* Supabase in Frameworks */,
 				8E178D3B2DAC6D17007E8F9C /* WebRTC in Frameworks */,
+				8EB661062DAE5CEC00FCBA67 /* GoogleSignIn in Frameworks */,
+				8EB661082DAE5CEC00FCBA67 /* GoogleSignInSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -84,6 +90,9 @@
 			name = "swift-hau";
 			packageProductDependencies = (
 				8E178D3A2DAC6D17007E8F9C /* WebRTC */,
+				8EB660FC2DAE4EED00FCBA67 /* Supabase */,
+				8EB661052DAE5CEC00FCBA67 /* GoogleSignIn */,
+				8EB661072DAE5CEC00FCBA67 /* GoogleSignInSwift */,
 			);
 			productName = "swift-hau";
 			productReference = 8EDF8FEB2DA8E78200446E23 /* swift-hau.app */;
@@ -115,6 +124,8 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				8E178D392DAC6D17007E8F9C /* XCRemoteSwiftPackageReference "WebRTC" */,
+				8EB660FB2DAE4EED00FCBA67 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				8EB661042DAE5CEC00FCBA67 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8EDF8FEC2DA8E78200446E23 /* Products */;
@@ -374,6 +385,22 @@
 				minimumVersion = 135.0.0;
 			};
 		};
+		8EB660FB2DAE4EED00FCBA67 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+		8EB661042DAE5CEC00FCBA67 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -381,6 +408,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 8E178D392DAC6D17007E8F9C /* XCRemoteSwiftPackageReference "WebRTC" */;
 			productName = WebRTC;
+		};
+		8EB660FC2DAE4EED00FCBA67 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8EB660FB2DAE4EED00FCBA67 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+		8EB661052DAE5CEC00FCBA67 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8EB661042DAE5CEC00FCBA67 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		8EB661072DAE5CEC00FCBA67 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8EB661042DAE5CEC00FCBA67 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

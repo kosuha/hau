@@ -2,6 +2,7 @@ import UIKit
 import PushKit
 import CallKit
 import AVFoundation
+import GoogleSignIn
 
 class AppDelegate: NSObject, UIApplicationDelegate, PKPushRegistryDelegate {
     // CallManager 싱글톤 인스턴스 참조
@@ -88,5 +89,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, PKPushRegistryDelegate {
             // iOS 13 이상에서는 반드시 이 메서드에서 CallKit을 보여줘야 함
             callManager.reportIncomingCall(uuid: uuid, handle: handle)
         }
+    }
+    
+    // URL 스키마를 통한 앱 호출 처리 (구글 로그인 콜백)
+    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+        return GIDSignIn.sharedInstance.handle(url)
     }
 }

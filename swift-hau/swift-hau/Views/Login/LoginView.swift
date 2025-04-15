@@ -6,8 +6,13 @@
 //
 
 import SwiftUI
+import AuthenticationServices
+import GoogleSignIn
 
 struct LoginScreen: View {
+    @EnvironmentObject var authViewModel: AuthViewModel
+    @State private var showingAlert = false
+    
     var body: some View {
         ZStack {
             AppTheme.Gradients.primary
@@ -30,35 +35,34 @@ struct LoginScreen: View {
                 
                 Spacer()
                 
-                VStack(spacing: 12) {
-                    // Apple 로그인 버튼
+                VStack(spacing: 16) {
+                    // 애플로 로그인 버튼
                     Button(action: {
-                        // Apple 로그인 처리
+                        authViewModel.signInWithApple()
                     }) {
-                        HStack(spacing: 6) {
+                        HStack {
                             Image(systemName: "apple.logo")
-                                .font(.system(size: 22))
+                                .font(.system(size: 24))
+                                .foregroundColor(.white)
                             
-                            Text("Apple로 시작하기")
+                            Text("Apple로 로그인")
                                 .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.white)
                         }
-                        .foregroundColor(AppTheme.Colors.light)
                         .frame(maxWidth: .infinity)
                         .frame(height: 56)
                         .background(Color.black)
                         .cornerRadius(999)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 999)
-                                .stroke(Color.black, lineWidth: 1)
-                        )
                     }
                     
                     // Google 로그인 버튼
                     Button(action: {
-                        // Google 로그인 처리
+                        authViewModel.signInWithGoogle()
                     }) {
                         HStack(spacing: 6) {
-                            GoogleLogo()
+                            Image("google_logo") // 구글 로고 이미지 사용 또는 아래 커스텀 뷰 유지
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
                                 .frame(width: 22, height: 22)
                             
                             Text("Google로 시작하기")
@@ -79,21 +83,38 @@ struct LoginScreen: View {
                 
                 Spacer(minLength: 70)
             }
+            
+            // 로딩 표시
+            if authViewModel.isLoading {
+                Color.black.opacity(0.4)
+                    .ignoresSafeArea()
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(2)
+            }
+        }
+        .alert(isPresented: $showingAlert) {
+            Alert(
+                title: Text("오류"),
+                message: Text(authViewModel.errorMessage ?? "알 수 없는 오류가 발생했습니다."),
+                dismissButton: .default(Text("확인"))
+            )
+        }
+        .onChange(of: authViewModel.errorMessage) { newValue in
+            if newValue != nil {
+                showingAlert = true
+            }
         }
     }
 }
 
-// Google 로고를 위한 커스텀 뷰
+// Google 로고를 위한 커스텀 뷰 (필요시 사용)
 struct GoogleLogo: View {
-    var body: some View {
-        Image("google_logo") // 이미지 에셋으로 대체하는 것이 간단합니다
+    var body: some View {        
+        Image("google_logo")
             .resizable()
             .aspectRatio(contentMode: .fit)
-        
-        // 또는 SF Symbols 사용
-        // Image(systemName: "g.circle.fill")
-        //     .resizable()
-        //     .aspectRatio(contentMode: .fit)
+            .frame(width: 22, height: 22)
     }
 }
 
