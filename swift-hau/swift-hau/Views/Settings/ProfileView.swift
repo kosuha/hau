@@ -10,9 +10,12 @@ import SwiftUI
 struct ProfileView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var viewModel = ProfileViewModel()
+    @EnvironmentObject private var authViewModel: AuthViewModel
     
     @State private var showDatePicker = false
     @State private var showDiscardAlert = false
+    @State private var showLogoutAlert = false
+    @State private var showDeleteAccountAlert = false
     
     var body: some View {
         VStack(spacing: 16) {
@@ -104,7 +107,7 @@ struct ProfileView: View {
                     // 로그아웃 및 회원탈퇴 버튼
                     HStack(spacing: 24) {
                         Button(action: {
-                            viewModel.logout()
+                            showLogoutAlert = true
                         }) {
                             Text("로그아웃")
                                 .font(.system(size: 16))
@@ -113,7 +116,7 @@ struct ProfileView: View {
                         }
                         
                         Button(action: {
-                            viewModel.deleteAccount()
+                            showDeleteAccountAlert = true
                         }) {
                             Text("회원탈퇴")
                                 .font(.system(size: 16))
@@ -161,6 +164,27 @@ struct ProfileView: View {
         } message: {
             Text("저장하지 않은 내용은 사라집니다.")
         }
+        
+        // 로그아웃 확인 경고
+        .alert("로그아웃", isPresented: $showLogoutAlert) {
+            Button("취소", role: .cancel) { }
+            Button("로그아웃", role: .destructive) {
+                viewModel.logout(authViewModel: authViewModel)
+            }
+        } message: {
+            Text("정말 로그아웃 하시겠습니까?")
+        }
+        
+        // 회원탈퇴 확인 경고
+        .alert("회원탈퇴", isPresented: $showDeleteAccountAlert) {
+            Button("취소", role: .cancel) { }
+            Button("탈퇴하기", role: .destructive) {
+                viewModel.deleteAccount(authViewModel: authViewModel)
+            }
+        } message: {
+            Text("모든 계정 정보가 삭제되며 복구할 수 없습니다. 정말 탈퇴하시겠습니까?")
+        }
+        
         .onAppear {
             viewModel.loadUserData()
         }
@@ -199,69 +223,5 @@ struct DatePickerSheet: View {
             .padding(.bottom, 20)
         }
         .padding(.top, 20)
-    }
-}
-
-// 프로필 뷰모델
-class ProfileViewModel: ObservableObject {
-    @Published var name: String = ""
-    @Published var birthdate: Date = Date()
-    @Published var selfStory: String = ""
-    
-    let maxLength = 2000
-    private var originalName: String = ""
-    private var originalBirthdate: Date = Date()
-    private var originalSelfStory: String = ""
-    
-    var isModified: Bool {
-        return name != originalName ||
-               !Calendar.current.isDate(birthdate, inSameDayAs: originalBirthdate) ||
-               selfStory != originalSelfStory
-    }
-    
-    var formattedBirthdate: String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .long
-        formatter.locale = Locale(identifier: "ko_KR")
-        return formatter.string(from: birthdate)
-    }
-    
-    func loadUserData() {
-        // 실제 앱에서는 UserDefaults, CoreData, 또는 API에서 데이터를 가져옴
-        // 예시 데이터
-        name = UserDefaults.standard.string(forKey: "userName") ?? ""
-        if let savedDate = UserDefaults.standard.object(forKey: "userBirthdate") as? Date {
-            birthdate = savedDate
-        }
-        selfStory = UserDefaults.standard.string(forKey: "userSelfStory") ?? ""
-        
-        // 원본 데이터 저장
-        originalName = name
-        originalBirthdate = birthdate
-        originalSelfStory = selfStory
-    }
-    
-    func saveProfile() {
-        // 실제 앱에서는 UserDefaults, CoreData, 또는 API에 데이터를 저장
-        UserDefaults.standard.set(name, forKey: "userName")
-        UserDefaults.standard.set(birthdate, forKey: "userBirthdate")
-        UserDefaults.standard.set(selfStory, forKey: "userSelfStory")
-        
-        // 원본 데이터 업데이트
-        originalName = name
-        originalBirthdate = birthdate
-        originalSelfStory = selfStory
-        
-        print("프로필이 저장되었습니다.")
-    }
-    
-    func logout() {
-        // 로그아웃 로직
-        print("로그아웃")
-    }
-    
-    func deleteAccount() {
-        // 회원탈퇴 로직
-        print("회원탈퇴")
     }
 }
