@@ -9,7 +9,7 @@ import SwiftUI
 
 struct VoiceSettingView: View {
     @Environment(\.dismiss) var dismiss
-    @StateObject private var viewModel = VoiceSettingViewModel()
+    @EnvironmentObject private var userViewModel: UserViewModel
     @State private var showDiscardAlert = false
     
     var body: some View {
@@ -18,7 +18,7 @@ struct VoiceSettingView: View {
             HeaderView(
                 onPress: {
                     // 변경 사항이 있으면 경고 표시
-                    if viewModel.isModified {
+                    if userViewModel.isVoiceModified {
                         showDiscardAlert = true
                     } else {
                         dismiss()
@@ -42,16 +42,16 @@ struct VoiceSettingView: View {
                             VoiceOptionButton(
                                 title: "범수",
                                 description: "자상하고 차분한 남자 목소리",
-                                isSelected: viewModel.selectedVoice == "Beomsoo",
-                                action: { viewModel.selectedVoice = "Beomsoo" }
+                                isSelected: userViewModel.selectedVoice == "Beomsoo",
+                                action: { userViewModel.selectedVoice = "Beomsoo" }
                             )
                             
                             // 진주 목소리 옵션
                             VoiceOptionButton(
                                 title: "진주",
                                 description: "친절하고 밝은 여자 목소리",
-                                isSelected: viewModel.selectedVoice == "Jinjoo",
-                                action: { viewModel.selectedVoice = "Jinjoo" }
+                                isSelected: userViewModel.selectedVoice == "Jinjoo",
+                                action: { userViewModel.selectedVoice = "Jinjoo" }
                             )
                         }
                     }
@@ -63,7 +63,7 @@ struct VoiceSettingView: View {
                 
                 // 저장 버튼
                 Button(action: {
-                    viewModel.saveVoiceSetting()
+                    userViewModel.saveVoiceSetting()
                     dismiss()
                 }) {
                     Text("저장하기")
@@ -84,13 +84,14 @@ struct VoiceSettingView: View {
         .alert("주의", isPresented: $showDiscardAlert) {
             Button("취소", role: .cancel) { }
             Button("나가기", role: .destructive) {
+                userViewModel.cancelVoiceEditing()
                 dismiss()
             }
         } message: {
             Text("저장하지 않은 내용은 사라집니다.")
         }
         .onAppear {
-            viewModel.loadVoiceSetting()
+            userViewModel.beginVoiceEditing()
         }
     }
 }
@@ -123,29 +124,5 @@ struct VoiceOptionButton: View {
                     .stroke(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.disabled, lineWidth: 1)
             )
         }
-    }
-}
-
-// 뷰모델
-class VoiceSettingViewModel: ObservableObject {
-    @Published var selectedVoice: String = "Beomsoo"
-    private var originalVoice: String = "Beomsoo"
-    
-    var isModified: Bool {
-        return selectedVoice != originalVoice
-    }
-    
-    func loadVoiceSetting() {
-        // UserDefaults에서 저장된 목소리 설정 불러오기
-        if let savedVoice = UserDefaults.standard.string(forKey: "userVoice") {
-            selectedVoice = savedVoice
-            originalVoice = savedVoice
-        }
-    }
-    
-    func saveVoiceSetting() {
-        // UserDefaults에 목소리 설정 저장
-        UserDefaults.standard.set(selectedVoice, forKey: "userVoice")
-        originalVoice = selectedVoice
     }
 }

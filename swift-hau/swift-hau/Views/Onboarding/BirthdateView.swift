@@ -78,8 +78,7 @@ struct BirthdateView: View {
                     userViewModel.updateUserData(birthdate: selectedDate)
                     
                     // 다음 화면으로 이동
-                    // 여기서는 네비게이션 스택을 사용한다고 가정
-                    // 실제 구현에서는 네비게이션 방식에 맞게 수정 필요
+                    onNext()
                 }) {
                     Text("다음")
                         .font(.system(size: 16, weight: .bold))

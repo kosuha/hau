@@ -10,6 +10,7 @@ import SwiftUI
 struct OnboardingView: View {
     @EnvironmentObject var userViewModel: UserViewModel
     @State private var currentStep: OnboardingStep = .name
+    var onComplete: () -> Void
     
     enum OnboardingStep {
         case name
@@ -59,6 +60,6 @@ struct OnboardingView: View {
     
     private func completeOnboarding() {
         // 온보딩 완료 후 메인 화면으로 돌아가기
-        // 이 함수는 호출한 부모 뷰에서 처리할 수 있도록 콜백으로 전달할 수도 있습니다
+        onComplete()
     }
 } 

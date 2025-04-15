@@ -174,3 +174,10 @@ struct CallView: View {
     }
 }
 
+// preview
+struct CallView_Previews: PreviewProvider {
+    static var previews: some View {
+        CallView()
+    }
+}
+
