@@ -6,6 +6,10 @@
 //
 
 import SwiftUI
+import Supabase
+
+let client = SupabaseClient(
+    supabaseURL: URL(string: "https://xyzcompany.supabase.co")!, supabaseKey: "public-anon-key")
 
 @main
 struct HAUApp: App {
