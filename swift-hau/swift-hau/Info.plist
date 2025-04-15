@@ -32,12 +32,12 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-				<string>com.googleusercontent.apps.893857907553-dev2tp86d5jtl3juua486spetpunv3qv</string>
+				<string>$(GOOGLE_URL_SCHEME)</string>
 			</array>
 		</dict>
 	</array>
 
 	<key>GIDClientID</key>
-	<string>893857907553-dev2tp86d5jtl3juua486spetpunv3qv.apps.googleusercontent.com</string>
+	<string>$(GOOGLE_CLIENT_ID)</string>
 </dict>
 </plist>
