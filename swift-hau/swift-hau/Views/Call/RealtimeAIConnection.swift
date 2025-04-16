@@ -20,6 +20,11 @@ class RealtimeAIConnection: NSObject {
     private var isInitialized = false
     private var connectionLock = NSLock() // 연결 동기화용 락
     
+    // 오디오 관련 변수들을 클래스 본문으로 이동
+    private var audioStart: Int = 0
+    private var audioEnd: Int = 0
+    private var audioDuration: Int = 0
+    
     // 연결 상태 관리
     var isConnected: Bool = false
     var onStateChange: ((Bool) -> Void)?
@@ -324,6 +329,18 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                             ]
                         */
 
+                        if let type = jsonData["type"] as? String, type == "input_audio_buffer.speech_started" {
+                            if let audioStartMs = jsonData["audio_start_ms"] as? Int {
+                                audioStart = audioStartMs
+                            }
+                        }
+
+                        if let type = jsonData["type"] as? String, type == "input_audio_buffer.speech_stopped" {
+                            if let audioEndMs = jsonData["audio_end_ms"] as? Int {
+                                audioEnd = audioEndMs
+                            }
+                        }
+
                         if let type = jsonData["type"] as? String, type == "response.done" {
                             // print(jsonData)
                             if let response = jsonData["response"] as? [String: Any],
@@ -341,7 +358,7 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                let outputAudioTokens = outputTokens["audio_tokens"] as? Int,
                                let outputTextTokens = outputTokens["text_tokens"] as? Int {
 
-                                // 백만 토큰당 비용으로 계산 후 변환하여 정밀도 문제 해결
+                                // 백만 토큰당 비용 (gpt-4o-mini-realtime-preview)
                                 let audioInputRate = 10.0  // $10.00 per 1M tokens
                                 let textInputRate = 0.6    // $0.60 per 1M tokens
                                 let cachedRate = 0.3       // $0.30 per 1M tokens 
@@ -356,13 +373,18 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                 let textCachedCost = Double(inputCachedTextTokens) * cachedRate / millionTokens
                                 let audioOutputCost = Double(outputAudioTokens) * audioOutputRate / millionTokens
                                 let textOutputCost = Double(outputTextTokens) * textOutputRate / millionTokens
+
+                                // 음성 기록 $0.0001 = 1000 ms (whisper-1)
+                                let audioDurationSeconds = Double(audioDuration) / 1000.0
+                                let audioCost = audioDurationSeconds * 0.0001
                                 
-                                let totalCost = audioInputCost + textInputCost + audioCachedCost + textCachedCost + audioOutputCost + textOutputCost
+                                let totalCost = audioInputCost + textInputCost + audioCachedCost + textCachedCost + audioOutputCost + textOutputCost + audioCost
                                 
                                 print("AI 응답: \(transcript)\n")
                                 print("비용 내역: 오디오 입력=$\(String(format: "%.6f", audioInputCost)), 텍스트 입력=$\(String(format: "%.6f", textInputCost))")
                                 print("         캐시된 오디오=$\(String(format: "%.6f", audioCachedCost)), 캐시된 텍스트=$\(String(format: "%.6f", textCachedCost))")
                                 print("         오디오 출력=$\(String(format: "%.6f", audioOutputCost)), 텍스트 출력=$\(String(format: "%.6f", textOutputCost))")
+                                print("         음성 기록=$\(String(format: "%.6f", audioCost))")
                                 print("총 비용: $\(String(format: "%.6f", totalCost))")
                             }
                         }
