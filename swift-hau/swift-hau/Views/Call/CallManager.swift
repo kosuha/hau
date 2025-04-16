@@ -9,6 +9,7 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     @Published var shouldShowCallScreen = false
     @Published var isCallInProgress = false  // 통화 중 또는 통화 알림 진행 중 상태 추적
     @Published var callScreenPresentationID = UUID()
+    @Published var userViewModel: UserViewModel = UserViewModel()
     
     // 싱글톤 인스턴스
     static let shared = CallManager()
@@ -26,7 +27,7 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     override init() {
         // CallKit 제공자 설정
-        let providerConfiguration = CXProviderConfiguration(localizedName: "앱 이름")
+        let providerConfiguration = CXProviderConfiguration()
         providerConfiguration.supportsVideo = false
         providerConfiguration.maximumCallsPerCallGroup = 1
         providerConfiguration.supportedHandleTypes = [.phoneNumber, .generic]
@@ -128,9 +129,9 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     func requestCallPush(receiverID: String) {
         // 서버에 보낼 데이터 준비
         let parameters: [String: Any] = [
-            "caller_id": "test_id",
+            "caller_id": receiverID,
             "receiver_id": receiverID,
-            "caller_name": "test_id"
+            "caller_name": userViewModel.selectedVoice
         ]
         
         // 서버 요청 생성

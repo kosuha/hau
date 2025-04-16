@@ -76,6 +76,10 @@ fastify.get('/api/v1/realtime/sessions', async (request, reply) => {
     instructions: prompt,
     // 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', and 'verse'
     voice: 'ash',
+    input_audio_transcription: {
+      language: 'ko',
+      model: 'whisper-1'
+    }
   };
   const headers = {
     'Authorization': `Bearer ${apiKey}`,

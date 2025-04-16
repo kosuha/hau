@@ -243,7 +243,7 @@ extension RealtimeAIConnection: RTCPeerConnectionDelegate {
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {
-        print("ICE 후보 생성됨")
+        // print("ICE 후보 생성됨")
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {
@@ -283,7 +283,101 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
     
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
         if let message = String(data: buffer.data, encoding: .utf8) {
-            print("데이터 채널 메시지 수신: \(message)")
+            // print("데이터 채널 메시지 수신: \(message)")
+            if let json = message.data(using: .utf8) {
+                do {
+                    if let jsonData = try JSONSerialization.jsonObject(with: json, options: []) as? [String: Any] {
+                        /*
+                            gpt-4o-mini-realtime-preview audio
+                            input
+                            $10.00 = 1,000,000 tokens (1 token = $0.000010)
+                            cached
+                            $0.30 = 1,000,000 tokens (1 token = $0.0000003)
+                            output
+                            $20.00 = 1,000,000 tokens (1 token = $0.000020)
+
+                            gpt-4o-mini-realtime-preview text
+                            input
+                            $0.60 = 1,000,000 tokens (1 token = $0.0000006)
+                            cached
+                            $0.30 = 1,000,000 tokens (1 token = $0.0000003)
+                            output
+                            $2.40 = 1,000,000 tokens (1 token = $0.0000024)
+                        
+                            [
+                                "input_token_details": {
+                                    "audio_tokens" = 728;
+                                    "cached_tokens" = 1408;
+                                    "cached_tokens_details" = {
+                                        "audio_tokens" = 640;
+                                        "text_tokens" = 768;
+                                    };
+                                    "text_tokens" = 801;
+                                }, 
+                                "output_token_details": {
+                                    "audio_tokens" = 255;
+                                    "text_tokens" = 75;
+                                }, 
+                                "total_tokens": 1859, 
+                                "output_tokens": 330, 
+                                "input_tokens": 1529
+                            ]
+                        */
+
+                        if let type = jsonData["type"] as? String, type == "response.done" {
+                            // print(jsonData)
+                            if let response = jsonData["response"] as? [String: Any],
+                               let output = response["output"] as? [[String: Any]],
+                               let message = output.first?["content"] as? [[String: Any]],
+                               let transcript = message.first?["transcript"] as? String,
+                               let usage = response["usage"] as? [String: Any],
+                               let inputTokens = usage["input_token_details"] as? [String: Any],
+                               let inputAudioTokens = inputTokens["audio_tokens"] as? Int,
+                               let inputTextTokens = inputTokens["text_tokens"] as? Int,
+                               let inputCachedTokens = inputTokens["cached_tokens_details"] as? [String: Any],
+                               let inputCachedAudioTokens = inputCachedTokens["audio_tokens"] as? Int,
+                               let inputCachedTextTokens = inputCachedTokens["text_tokens"] as? Int,
+                               let outputTokens = usage["output_token_details"] as? [String: Any],
+                               let outputAudioTokens = outputTokens["audio_tokens"] as? Int,
+                               let outputTextTokens = outputTokens["text_tokens"] as? Int {
+
+                                // 백만 토큰당 비용으로 계산 후 변환하여 정밀도 문제 해결
+                                let audioInputRate = 10.0  // $10.00 per 1M tokens
+                                let textInputRate = 0.6    // $0.60 per 1M tokens
+                                let cachedRate = 0.3       // $0.30 per 1M tokens 
+                                let audioOutputRate = 20.0 // $20.00 per 1M tokens
+                                let textOutputRate = 2.4   // $2.40 per 1M tokens
+                                
+                                let millionTokens = 1_000_000.0
+                                
+                                let audioInputCost = Double(inputAudioTokens) * audioInputRate / millionTokens
+                                let textInputCost = Double(inputTextTokens) * textInputRate / millionTokens
+                                let audioCachedCost = Double(inputCachedAudioTokens) * cachedRate / millionTokens
+                                let textCachedCost = Double(inputCachedTextTokens) * cachedRate / millionTokens
+                                let audioOutputCost = Double(outputAudioTokens) * audioOutputRate / millionTokens
+                                let textOutputCost = Double(outputTextTokens) * textOutputRate / millionTokens
+                                
+                                let totalCost = audioInputCost + textInputCost + audioCachedCost + textCachedCost + audioOutputCost + textOutputCost
+                                
+                                print("AI 응답: \(transcript)\n")
+                                print("비용 내역: 오디오 입력=$\(String(format: "%.6f", audioInputCost)), 텍스트 입력=$\(String(format: "%.6f", textInputCost))")
+                                print("         캐시된 오디오=$\(String(format: "%.6f", audioCachedCost)), 캐시된 텍스트=$\(String(format: "%.6f", textCachedCost))")
+                                print("         오디오 출력=$\(String(format: "%.6f", audioOutputCost)), 텍스트 출력=$\(String(format: "%.6f", textOutputCost))")
+                                print("총 비용: $\(String(format: "%.6f", totalCost))")
+                            }
+                        }
+                        
+                        if let type = jsonData["type"] as? String, type == "conversation.item.input_audio_transcription.completed" {
+                            // print("jsonData: \(jsonData)")
+                            if let transcript = jsonData["transcript"] as? String {
+                                print("음성 입력: \(transcript)\n")
+                            }
+                        }
+                    }
+                } catch {
+                    print("JSON 파싱 오류: \(error)")
+                }
+            }
         }
     }
 }
