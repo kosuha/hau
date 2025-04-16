@@ -41,11 +41,17 @@ struct MainView: View {
                     // 콘텐츠
                     VStack(alignment: .leading, spacing: 0) {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("\(userViewModel.userData.name ?? "주야")님,")
-                                .font(.system(size: 26, weight: .bold))
-                                .foregroundColor(.white)
+                            if let name = userViewModel.userData.name {
+                                Text("\(name)님,")
+                                    .font(.system(size: 26, weight: .bold))
+                                    .foregroundColor(.white)
+                            } else {
+                                Text("안녕,")
+                                    .font(.system(size: 26, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
                             
-                            Text("좋은 아침이에요!")
+                            Text("반가워요!")
                                 .font(.system(size: 26, weight: .bold))
                                 .foregroundColor(.white)
                         }

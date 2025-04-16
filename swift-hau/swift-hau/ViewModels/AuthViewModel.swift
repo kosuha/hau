@@ -162,6 +162,14 @@ class AuthViewModel: NSObject, ObservableObject {
                 await MainActor.run {
                     self.currentUser = response.user
                     self.isLoggedIn = true
+                    
+                    // 로그인 성공 후 UserViewModel 업데이트
+                    if let userViewModel = self.userViewModel {
+                        userViewModel.setUserId(response.user.id.uuidString)
+                        // 명시적으로 사용자 데이터 가져오기
+                        Task { await userViewModel.fetchUserData() }
+                    }
+                    
                     self.isLoading = false
                 }
             } catch {
@@ -287,6 +295,14 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                 await MainActor.run {
                     self.currentUser = response.user
                     self.isLoggedIn = true
+                    
+                    // 로그인 성공 후 UserViewModel 업데이트
+                    if let userViewModel = self.userViewModel {
+                        userViewModel.setUserId(response.user.id.uuidString)
+                        // 명시적으로 사용자 데이터 가져오기
+                        Task { await userViewModel.fetchUserData() }
+                    }
+                    
                     self.isLoading = false
                 }
             } catch {
