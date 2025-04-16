@@ -10,6 +10,9 @@ class AuthViewModel: NSObject, ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String? = nil
     
+    // UserViewModel 참조 추가
+    var userViewModel: UserViewModel?
+    
     // 로그인 과정에서 nonce를 저장하기 위한 변수
     private var currentNonce: String?
     
@@ -45,27 +48,27 @@ class AuthViewModel: NSObject, ObservableObject {
     // 사용자 정보 가져오기
     func fetchUser() async {
         do {
-            // 현재 세션에서 사용자 정보 가져오기
-            if let user = try? await client.auth.session.user {
-                await MainActor.run {
-                    self.currentUser = user
-                    self.isLoggedIn = true
-                    self.isLoading = false
+            // 실제 Supabase에서 사용자 정보 가져오기
+            let session = try await client.auth.session
+            let user = session.user
+            
+            await MainActor.run {
+                self.currentUser = user
+                self.isLoggedIn = true
+                
+                // UserViewModel에 실제 사용자 ID 설정 - UUID를 문자열로 변환
+                if let userViewModel = self.userViewModel {
+                    userViewModel.setUserId(user.id.uuidString)
                 }
-            } else {
-                // 사용자 정보가 없으면 로그아웃 상태로 설정
-                await MainActor.run {
-                    self.isLoggedIn = false
-                    self.isLoading = false
-                }
+                
+                self.isLoading = false
             }
         } catch {
             print("사용자 정보 가져오기 오류: \(error.localizedDescription)")
             await MainActor.run {
                 self.isLoggedIn = false
+                self.currentUser = nil
                 self.isLoading = false
-                // 오류 메시지 표시 (필요하다면)
-                // self.errorMessage = "사용자 정보를 가져오는 중 오류가 발생했습니다."
             }
         }
     }
@@ -231,6 +234,10 @@ class AuthViewModel: NSObject, ObservableObject {
         let hashString = hashedData.compactMap { String(format: "%02x", $0) }.joined()
         
         return hashString
+    }
+    
+    func setUserViewModel(_ viewModel: UserViewModel) {
+        self.userViewModel = viewModel
     }
 }
 

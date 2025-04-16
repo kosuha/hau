@@ -101,9 +101,9 @@ struct SelfIntroView: View {
                     
                     // 시작하기 버튼
                     Button(action: {
-                        // 자기 소개 저장
-                        userViewModel.updateUserData(selfStory: text)
-                        
+                        // 자기 소개 저장 (userData 직접 수정)
+                        userViewModel.userData.selfIntro = text
+
                         // 온보딩 완료 및 다음 화면으로 이동
                         onNext()
                     }) {
@@ -123,10 +123,11 @@ struct SelfIntroView: View {
         .background(Color.white.edgesIgnoringSafeArea(.all))
         .navigationBarHidden(true)
         .onAppear {
-            // 화면이 나타날 때 저장된 자기 소개 불러오기
-            if let savedStory = userViewModel.userData.selfIntro {
-                text = savedStory
-            }
+            // 화면이 나타날 때 저장된 자기 소개 불러오기 (UserViewModel에서)
+            // 이 부분은 UserViewModel의 fetchUserData가 완료된 후
+            // userData에 값이 채워져 있다면 해당 값을 사용하게 됩니다.
+            // 만약 fetchUserData 전에 이 뷰가 나타나면 초기값("")이 표시될 수 있습니다.
+            text = userViewModel.userData.selfIntro ?? ""
         }
     }
 }

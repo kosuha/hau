@@ -88,9 +88,12 @@ struct NameView: View {
                 
                 // 다음 버튼
                 Button(action: {
-                    // 이름 저장
-                    userViewModel.updateUserData(name: name)
-                    
+                    // 이름 저장 (userData 직접 수정)
+                    userViewModel.userData.name = name
+
+                    // UserDefaults에도 저장 (선택 사항: 온보딩 중간 저장)
+                    // UserDefaults.standard.set(name, forKey: "userName")
+
                     // 다음 화면으로 이동
                     onNext()
                 }) {

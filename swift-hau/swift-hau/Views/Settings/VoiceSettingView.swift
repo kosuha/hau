@@ -64,6 +64,7 @@ struct VoiceSettingView: View {
                 // 저장 버튼
                 Button(action: {
                     userViewModel.saveVoiceSetting()
+                    userViewModel.saveProfile()
                     dismiss()
                 }) {
                     Text("저장하기")

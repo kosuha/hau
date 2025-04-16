@@ -74,9 +74,12 @@ struct BirthdateView: View {
                 
                 // 다음 버튼
                 Button(action: {
-                    // 생년월일 저장
-                    userViewModel.updateUserData(birthdate: selectedDate)
-                    
+                    // 생년월일 저장 (userData 직접 수정)
+                    userViewModel.userData.birthdate = selectedDate
+
+                    // UserDefaults에도 저장 (선택 사항: 온보딩 중간 저장)
+                    // UserDefaults.standard.set(selectedDate, forKey: "userBirthdate")
+
                     // 다음 화면으로 이동
                     onNext()
                 }) {

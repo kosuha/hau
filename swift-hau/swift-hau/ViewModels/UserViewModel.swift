@@ -12,8 +12,10 @@ import Supabase
 
 class UserViewModel: ObservableObject {
     @Published var userData: UserModel = UserModel()
-    @Published var isModified: Bool = false
     @Published var selectedVoice: String = "Beomsoo"
+    @Published var isLoading: Bool = false
+    @Published var errorMessage: String? = nil
+    @Published var isOnboardingCompleted: Bool = false
     
     // 원본 데이터 추적 (프로필 수정 용도)
     private var originalName: String?
@@ -24,6 +26,18 @@ class UserViewModel: ObservableObject {
     // 사용자 ID 추가
     private var userId: String? = nil
     let maxLength = 2000
+    
+    // 프로필 수정 여부 계산 속성
+    var isModified: Bool {
+        // userData의 현재 값과 original 값을 비교
+        // 옵셔널 값 비교 시 nil 처리 주의
+        let nameChanged = userData.name != originalName
+        let birthdateChanged = userData.birthdate != originalBirthdate
+        // selfIntro가 nil일 경우 빈 문자열로 간주하여 비교
+        let selfStoryChanged = (userData.selfIntro ?? "") != (originalSelfStory ?? "")
+
+        return nameChanged || birthdateChanged || selfStoryChanged
+    }
     
     // 음성 설정 관련 수정 여부 확인
     var isVoiceModified: Bool {
@@ -38,42 +52,194 @@ class UserViewModel: ObservableObject {
         return baseKey
     }
     
-    // 사용자 ID 설정 (로그인 시 호출)
+    // 사용자 ID 설정 (로그인 후 호출)
     func setUserId(_ id: String) {
         userId = id
-        loadUserData() // 사용자 ID가 설정되면 해당 사용자의 데이터 로드
-        loadVoiceSetting() // 음성 설정도 함께 로드
+        fetchUserData() // 사용자 ID가 설정되면 데이터 가져오기
     }
     
-    // 사용자 데이터 로드
-    func loadUserData() {
-        let defaults = UserDefaults.standard
-        
-        // 사용자별 키로 데이터 로드
-        if let name = defaults.string(forKey: keyFor("userName")) {
-            userData.name = name
+    // 서버에서 사용자 데이터 가져오기
+    func fetchUserData() {
+        isLoading = true
+
+        guard let userId = userId else {
+            print("사용자 ID가 없습니다.")
+            isLoading = false
+            return
         }
-        
-        if let birthdate = defaults.object(forKey: keyFor("userBirthdate")) as? Date {
-            userData.birthdate = birthdate
+
+        Task {
+            do {
+                print("사용자 데이터 조회 시도: auth_id=\(userId)")
+                let response = try await client.from("users")
+                    .select()
+                    .eq("auth_id", value: userId.lowercased()) // Supabase는 UUID를 소문자로 저장하는 경우가 많으므로 소문자 변환 추가
+                    .limit(1)
+                    .execute()
+
+                // 응답 데이터 확인 (디버깅용)
+                if let jsonString = String(data: response.data, encoding: .utf8) {
+                    print("응답 JSON 문자열: \(jsonString)")
+                }
+
+                // Supabase는 결과를 배열로 반환합니다.
+                let decoder = JSONDecoder()
+                let dateFormatter = DateFormatter()
+                // 밀리초(.SSS) 부분을 제거하여 좀 더 일반적인 ISO 8601 형식 처리
+                dateFormatter.dateFormat = "yyyy-MM-dd"
+                // 타임존 설정 (필요한 경우)
+                // dateFormatter.timeZone = TimeZone(secondsFromGMT: 0) // UTC
+                dateFormatter.locale = Locale(identifier: "en_US_POSIX") // ISO 8601 파싱에는 고정 로케일 사용 권장
+                decoder.dateDecodingStrategy = .formatted(dateFormatter)
+
+                // 1. 디코딩 시도
+                do {
+                    let profiles = try decoder.decode([UserModel].self, from: response.data)
+
+                    // 2. 프로필 존재 여부 확인
+                    if let profile = profiles.first {
+                        // 프로필 데이터가 성공적으로 디코딩되고 존재하는 경우
+                        await MainActor.run {
+                            self.userData = profile
+                            self.selectedVoice = profile.voice ?? "Beomsoo"
+
+                            // 원본 데이터 저장 (fetch 성공 시점에 원본 데이터 업데이트)
+                            self.originalName = profile.name
+                            self.originalBirthdate = profile.birthdate
+                            self.originalSelfStory = profile.selfIntro
+                            self.originalVoice = profile.voice ?? "Beomsoo"
+
+                            // 이름이 비어있지 않으면 온보딩 완료로 간주
+                            if let name = profile.name, !name.isEmpty {
+                                self.isOnboardingCompleted = true
+                                print("온보딩 완료: \(name)")
+                            } else {
+                                self.isOnboardingCompleted = false // 이름이 없으면 온보딩 미완료
+                            }
+
+                            self.isLoading = false
+                        }
+                    } else {
+                        // 3. 프로필 데이터가 없는 경우 (배열이 비어 있음)
+                        print("사용자 프로필을 찾을 수 없습니다. 새 프로필을 생성합니다.")
+                        await createAndSaveNewProfile(userId: userId)
+                    }
+                } catch let decodingError {
+                    // 4. 디코딩 오류 발생
+                    print("디코딩 오류: \(decodingError.localizedDescription)")
+                    // 디코딩 오류에 대한 상세 정보 출력
+                    if let decodingError = decodingError as? DecodingError {
+                        switch decodingError {
+                        case .typeMismatch(let type, let context):
+                            print("Type mismatch: \(type), Context: \(context.codingPath) - \(context.debugDescription)")
+                        case .valueNotFound(let type, let context):
+                            print("Value not found: \(type), Context: \(context.codingPath) - \(context.debugDescription)")
+                        case .keyNotFound(let key, let context):
+                            print("Key not found: \(key), Context: \(context.codingPath) - \(context.debugDescription)")
+                        case .dataCorrupted(let context):
+                            print("Data corrupted: Context: \(context.codingPath) - \(context.debugDescription)")
+                        @unknown default:
+                            print("Unknown decoding error")
+                        }
+                    }
+
+                    // --- 대체 날짜 형식 시도 (선택 사항) ---
+                    // 만약 위 형식으로도 실패하면, 다른 형식을 시도해볼 수 있습니다.
+                    // 예를 들어 'yyyy-MM-dd' 형식만 오는 경우:
+                    print("기본 날짜 형식 디코딩 실패. 'yyyy-MM-dd' 형식 시도...")
+                    dateFormatter.dateFormat = "yyyy-MM-dd"
+                    decoder.dateDecodingStrategy = .formatted(dateFormatter)
+                    do {
+                        let profiles = try decoder.decode([UserModel].self, from: response.data)
+                        if let profile = profiles.first {
+                            print("'yyyy-MM-dd' 형식으로 디코딩 성공.")
+                            // ... 성공 시 프로필 데이터 처리 (위와 동일 로직) ...
+                            await MainActor.run {
+                                self.userData = profile
+                                self.selectedVoice = profile.voice ?? "Beomsoo"
+                                // ... 원본 데이터 저장 ...
+                                // ... 온보딩 상태 확인 ...
+                                self.isLoading = false
+                            }
+                            // 성공했으므로 함수 종료
+                            return
+                        } else {
+                            // 'yyyy-MM-dd' 형식으로 디코딩은 성공했으나 데이터가 없는 경우
+                            print("대체 형식 디코딩 후 프로필 없음. 새 프로필 생성.")
+                            await createAndSaveNewProfile(userId: userId)
+                            return // 함수 종료
+                        }
+                    } catch let secondDecodingError {
+                        print("대체 날짜 형식 ('yyyy-MM-dd') 디코딩 오류: \(secondDecodingError.localizedDescription)")
+                        // 최종 실패 처리
+                        await MainActor.run {
+                            self.errorMessage = "사용자 데이터를 처리하는 중 오류가 발생했습니다. (날짜 형식 오류)"
+                            self.isLoading = false
+                        }
+                    }
+                    // --- 대체 날짜 형식 시도 끝 ---
+
+                    // 만약 대체 형식 시도를 하지 않는다면, 아래 코드는 유지합니다.
+                    // await MainActor.run {
+                    //     self.errorMessage = "사용자 데이터를 처리하는 중 오류가 발생했습니다. (형식 오류)"
+                    //     self.isLoading = false
+                    // }
+                }
+            } catch {
+                // 5. 네트워크 오류 또는 기타 Supabase 관련 오류
+                print("Supabase 데이터 조회 오류: \(error.localizedDescription)")
+                await MainActor.run {
+                    self.errorMessage = "데이터를 가져오는 중 오류가 발생했습니다."
+                    self.isLoading = false
+                }
+            }
         }
-        
-        if let selfIntro = defaults.string(forKey: keyFor("userSelfStory")) {
-            userData.selfIntro = selfIntro
+    }
+
+    // 새 프로필 생성 및 저장 (Helper 함수)
+    private func createAndSaveNewProfile(userId: String) async {
+        // 기본 사용자 프로필 생성
+        let newProfile = UserModel(
+            birthdate: nil,
+            name: "",
+            selfIntro: "",
+            voice: "Beomsoo",
+            callTime: "",
+            plan: "free",
+            authId: userId
+        )
+
+        // 새 프로필을 데이터베이스에 저장
+        print("새 프로필 저장 시도: auth_id=\(userId)")
+        do {
+            let insertResponse = try await client.from("users")
+                .insert(newProfile)
+                .execute()
+
+            print("새 프로필 저장 성공: \(insertResponse)")
+            print("응답 상태 코드: \(insertResponse.status)")
+
+            // 기본 프로필로 로컬 데이터 설정
+            await MainActor.run {
+                self.userData = newProfile
+                self.selectedVoice = "Beomsoo"
+
+                // 원본 데이터 저장 (새 프로필 생성 시점에도 원본 데이터 업데이트)
+                self.originalName = ""
+                self.originalBirthdate = nil
+                self.originalSelfStory = ""
+                self.originalVoice = "Beomsoo"
+
+                self.isOnboardingCompleted = false // 새 프로필은 온보딩 미완료 상태
+                self.isLoading = false
+            }
+        } catch {
+            print("새 프로필 저장 오류: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = "새 프로필을 저장하는 중 오류가 발생했습니다."
+                self.isLoading = false
+            }
         }
-        
-        if let voice = defaults.string(forKey: keyFor("userVoice")) {
-            userData.voice = voice
-        }
-        
-        if let callTime = defaults.string(forKey: keyFor("userCallTime")) {
-            userData.callTime = callTime
-        }
-        
-        // 원본 데이터 저장
-        originalName = userData.name
-        originalBirthdate = userData.birthdate
-        originalSelfStory = userData.selfIntro
     }
     
     // 음성 설정 불러오기
@@ -96,14 +262,6 @@ class UserViewModel: ObservableObject {
         userData.voice = selectedVoice
     }
     
-    // 프로필 수정 시작 (원본 데이터 저장)
-    func beginEditing() {
-        isModified = false
-        originalName = userData.name
-        originalBirthdate = userData.birthdate
-        originalSelfStory = userData.selfIntro
-    }
-    
     // 음성 설정 편집 시작
     func beginVoiceEditing() {
         originalVoice = selectedVoice
@@ -111,9 +269,11 @@ class UserViewModel: ObservableObject {
     
     // 프로필 수정 취소
     func cancelEditing() {
+        // userData를 원본 데이터로 복원
         userData.name = originalName
         userData.birthdate = originalBirthdate
         userData.selfIntro = originalSelfStory
+        // isModified는 자동으로 false가 됨 (computed property)
     }
     
     // 음성 설정 수정 취소
@@ -121,51 +281,64 @@ class UserViewModel: ObservableObject {
         selectedVoice = originalVoice
     }
     
-    // 사용자 데이터 업데이트
-    func updateUserData(name: String? = nil, birthdate: Date? = nil, selfStory: String? = nil, voice: String? = nil, callTime: String? = nil) {
-        let defaults = UserDefaults.standard
-        
-        if let name = name {
-            userData.name = name
-            defaults.set(name, forKey: keyFor("userName"))
-            isModified = true
-        }
-        
-        if let birthdate = birthdate {
-            userData.birthdate = birthdate
-            defaults.set(birthdate, forKey: keyFor("userBirthdate"))
-            isModified = true
-        }
-        
-        if let selfStory = selfStory {
-            userData.selfIntro = selfStory
-            defaults.set(selfStory, forKey: keyFor("userSelfStory"))
-            isModified = true
-        }
-        
-        if let voice = voice {
-            userData.voice = voice
-            selectedVoice = voice  // selectedVoice 동기화
-            defaults.set(voice, forKey: keyFor("userVoice"))
-            isModified = true
-        }
-        
-        if let callTime = callTime {
-            userData.callTime = callTime
-            defaults.set(callTime, forKey: keyFor("userCallTime"))
-            isModified = true
-        }
-    }
-    
-    // 프로필 저장
+    // 프로필 저장 (서버로 전송)
     func saveProfile() {
-        // 이미 updateUserData에서 UserDefaults에 저장하므로 따로 저장할 필요 없음
-        // 원본 데이터 업데이트
-        originalName = userData.name
-        originalBirthdate = userData.birthdate
-        originalSelfStory = userData.selfIntro
+        isLoading = true
         
-        print("프로필이 저장되었습니다.")
+        // 더미 저장 동작 - 로컬 상태만 즉시 업데이트
+        // 원본 데이터 업데이트
+        // self.originalName = self.userData.name
+        // self.originalBirthdate = self.userData.birthdate
+        // self.originalSelfStory = self.userData.selfIntro
+        // self.originalVoice = self.userData.voice ?? "Beomsoo"
+        
+        // self.isModified = false
+        // self.isLoading = false
+        
+        // TODO: 서버 연동 코드 - 테스트 후 주석 해제
+        
+        guard let userId = userId else {
+            print("사용자 ID가 없습니다.")
+            isLoading = false
+            return
+        }
+        
+        Task {
+            do {
+                // 서버로 전송할 데이터 준비
+                // Supabase에 데이터 업데이트
+                print("프로필 저장 시도: auth_id=\(userId)")
+                let response = try await client.from("users")
+                    .update(userData)
+                    .eq("auth_id", value: userId)
+                    .execute()
+
+                print("프로필 저장 성공: \(response)")
+                print("응답 상태 코드: \(response.status)")
+                
+                await MainActor.run {
+                    // 원본 데이터 업데이트 (저장 성공 시점에 원본 데이터 업데이트)
+                    self.originalName = self.userData.name
+                    self.originalBirthdate = self.userData.birthdate
+                    self.originalSelfStory = self.userData.selfIntro
+                    self.originalVoice = self.userData.voice ?? "Beomsoo"
+                    
+                    self.isLoading = false
+
+                    // 이름이 비어있지 않으면 온보딩 완료로 간주 (nil 또는 빈 문자열 확인)
+                    if let name = self.userData.name, !name.isEmpty {
+                        self.isOnboardingCompleted = true
+                    }
+                }
+            } catch {
+                print("프로필 저장 오류: \(error.localizedDescription)")
+                await MainActor.run {
+                    self.errorMessage = "프로필을 저장하는 중 오류가 발생했습니다."
+                    self.isLoading = false
+                }
+            }
+        }
+        
     }
     
     // 로그아웃 처리
@@ -178,7 +351,6 @@ class UserViewModel: ObservableObject {
         userId = nil
         // 데이터 초기화
         userData = UserModel()
-        isModified = false
     }
     
     // 회원탈퇴 처리
@@ -235,10 +407,37 @@ class UserViewModel: ObservableObject {
     }
     
     var formattedBirthdate: String {
-        guard let birthdate = userData.birthdate else { return "" }
+        guard let birthdate = userData.birthdate else { return "생년월일을 선택하세요" } // Placeholder 추가
         let formatter = DateFormatter()
-        formatter.dateStyle = .long
+        formatter.dateFormat = "yyyy년 M월 d일" // 원하는 형식으로 변경
         formatter.locale = Locale(identifier: "ko_KR")
         return formatter.string(from: birthdate)
+    }
+
+    // ProfileView의 TextEditor 바인딩을 위한 헬퍼
+    // userData.selfIntro가 String? 이므로, Non-optional String 바인딩 제공
+    var selfIntroBinding: Binding<String> {
+        Binding<String>(
+            get: { self.userData.selfIntro ?? "" },
+            set: { self.userData.selfIntro = $0 }
+        )
+    }
+
+    // ProfileView의 TextField 바인딩을 위한 헬퍼
+    // userData.name이 String? 이므로, Non-optional String 바인딩 제공
+    var nameBinding: Binding<String> {
+        Binding<String>(
+            get: { self.userData.name ?? "" },
+            set: { self.userData.name = $0 }
+        )
+    }
+
+    // ProfileView의 DatePickerSheet 바인딩을 위한 헬퍼
+    // userData.birthdate가 Date? 이므로, Non-optional Date 바인딩 제공 (기본값 설정)
+    var birthdateBinding: Binding<Date> {
+        Binding<Date>(
+            get: { self.userData.birthdate ?? Date() }, // 기본값으로 현재 날짜 사용 또는 다른 적절한 기본값 설정
+            set: { self.userData.birthdate = $0 }
+        )
     }
 }
