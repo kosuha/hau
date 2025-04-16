@@ -25,83 +25,89 @@ struct CallView: View {
     }
     
     var body: some View {
-        VStack {
-            if callManager.shouldShowCallScreen {
-                VStack(spacing: 20) {
-                    // 통화 상태에 따라 다른 메시지 표시
-                    Group {
-                        switch callState {
-                        case .preparing:
-                            Text("통화 준비 중...")
-                                .font(.title)
-                                .foregroundColor(.orange)
-                        case .connected:
-                            Text("통화 중...")
-                                .font(.title)
-                                .foregroundColor(.green)
-                        case .disconnected:
-                            Text("통화가 종료되었습니다")
-                                .font(.title)
-                                .foregroundColor(.red)
+        ZStack {
+            AppTheme.Gradients.primary
+                    .ignoresSafeArea()
+
+            VStack {
+
+                if callManager.shouldShowCallScreen {
+                // if true {
+                    VStack(spacing: 20) {
+                        // 통화 상태
+                        Group {
+                            switch callState {
+                            case .preparing:
+                                Text("통화 준비 중...")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(AppTheme.Colors.lightTransparent)
+                            case .connected:
+                                Text("12:34")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(AppTheme.Colors.lightTransparent)
+                            case .disconnected:
+                                Text("통화 종료")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(AppTheme.Colors.lightTransparent)
+                            }
                         }
+                        .padding()
+
+                        // 통화 상대
+                        Text("범수")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(AppTheme.Colors.light)
+
+                        Spacer()
+
+                        Button(action: {
+                            callState = .disconnected
+                            callManager.endCall()
+                            dismiss()
+                        }) {
+                            Image(systemName: "phone.down.fill")
+                                .font(.system(size: 28))
+                                .foregroundColor(.white)
+                        }
+                        .padding(20)
+                        .frame(width: 84, height: 84)
+                        .background(Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(999)
                     }
-                    .padding()
-                    
-                    // 준비 중일 때는 프로그레스 인디케이터 표시
-                    if callState == .preparing {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                            .scaleEffect(1.5)
-                            .padding()
-                    }
-                    
-                    Button("통화 종료") {
-                        callState = .disconnected
-                        callManager.endCall()
-                        dismiss()
-                    }
-                    .padding()
-                    .background(Color.red)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
+                    .padding(40)
                 }
-                .padding()
-            } else {
-                Text("통화 종료")
-                Button("돌아가기") {
+            }
+            .navigationBarHidden(true)
+            .onAppear {
+                if callManager.shouldShowCallScreen {
+                    // 통화 시작 시 상태를 '준비 중'으로 설정
+                    callState = .preparing
+                    // AI 연결 시작
+                    connectAI()
+                } else {
+                    // 통화가 종료되면 AI 연결도 종료
+                    disconnectAI()
                     dismiss()
                 }
             }
-        }
-        .navigationBarHidden(true)
-        .onAppear {
-            if callManager.shouldShowCallScreen {
-                // 통화 시작 시 상태를 '준비 중'으로 설정
-                callState = .preparing
-                // AI 연결 시작
-                connectAI()
-            } else {
-                // 통화가 종료되면 AI 연결도 종료
-                disconnectAI()
-                dismiss()
+            .onChange(of: callManager.shouldShowCallScreen) { newValue in
+                if newValue == true {
+                    callState = .preparing
+                    connectAI()
+                } else {
+                    disconnectAI()
+                    callState = .disconnected
+                    dismiss()
+                }
             }
-        }
-        .onChange(of: callManager.shouldShowCallScreen) { newValue in
-            if newValue == true {
-                callState = .preparing
-                connectAI()
-            } else {
+            .onDisappear {
+                // 화면이 사라질 때도 확실히 연결 종료
                 disconnectAI()
-                callState = .disconnected
-                dismiss()
+                
+                // 통화 상태 리셋 및 스택 정리
+                callManager.resetCallStatus()
             }
-        }
-        .onDisappear {
-            // 화면이 사라질 때도 확실히 연결 종료
-            disconnectAI()
-            
-            // 통화 상태 리셋 및 스택 정리
-            callManager.resetCallStatus()
         }
     }
     
