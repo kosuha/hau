@@ -79,7 +79,15 @@ fastify.get('/api/v1/realtime/sessions', async (request, reply) => {
     input_audio_transcription: {
       language: 'ko',
       model: 'whisper-1'
-    }
+    },
+    tools: [
+      {
+        type: "function",
+        name: "endCall",
+        description: "상대방이 통화 종료의 의사를 밝혔을 경우, 당신이 통화를 종료하려면 함수를 호출하세요."
+      }
+    ],
+    tool_choice: "auto",
   };
   const headers = {
     'Authorization': `Bearer ${apiKey}`,

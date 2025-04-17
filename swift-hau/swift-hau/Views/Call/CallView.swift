@@ -135,14 +135,25 @@ struct CallView: View {
         // 기존 연결 종료
         RealtimeAIConnection.shared.disconnect()
         
-        // 연결 상태 변경 콜백 설정
+        // CallManager 설정
+        RealtimeAIConnection.shared.setCallManager(callManager)
+        
+        // 콜백 설정 - 통화 상태 변경과 통화 종료 처리
         RealtimeAIConnection.shared.onStateChange = { isConnected in
             DispatchQueue.main.async {
                 if isConnected {
                     self.callState = .connected
-                } else {
-                    self.callState = .preparing
+                } else if self.callState == .connected {
+                    // 이미 연결된 상태에서만 끊김 처리
+                    // 초기화 중에는 disconnected로 처리하지 않음
+                    self.callState = .disconnected
+                    
+                    // 연결 끊김 시 통화 종료
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        self.dismiss()
+                    }
                 }
+                // 초기 상태에서는 아무 동작 안함
             }
         }
         

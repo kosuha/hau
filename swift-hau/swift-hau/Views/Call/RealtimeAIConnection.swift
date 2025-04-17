@@ -8,6 +8,7 @@
 import Foundation
 import WebRTC
 import AVFoundation
+import CallKit
 
 class RealtimeAIConnection: NSObject {
     static let shared = RealtimeAIConnection()
@@ -28,6 +29,21 @@ class RealtimeAIConnection: NSObject {
     // 연결 상태 관리
     var isConnected: Bool = false
     var onStateChange: ((Bool) -> Void)?
+    
+    // 대화 내용과 비용 기록
+    private var conversations: [[String: Any]] = []
+    private var currentSessionCost: Double = 0.0
+    private var costLimit: Double = 0.5 // 기본 비용 제한 (0.5달러)
+    
+    // 서버 통신 URL
+    private let serverURL = URL(string: "https://your-api-server.com/conversations")!
+    
+    // 콜 매니저 변수 추가
+    private var callManager: CallManager?
+    
+    // 클래스 멤버 변수에 추가
+    private var pendingEndCall: Bool = false
+    private var pendingCallManager: CallManager? = nil
     
     private override init() {
         super.init()
@@ -53,7 +69,10 @@ class RealtimeAIConnection: NSObject {
         
         // 상태 업데이트
         isConnected = false
-        onStateChange?(false)
+        // 메인 스레드에서 콜백 호출
+        DispatchQueue.main.async {
+            self.onStateChange?(false)
+        }
         
         // RTCPeerConnection 생성
         setupPeerConnection()
@@ -70,7 +89,10 @@ class RealtimeAIConnection: NSObject {
             
             if success {
                 self.isConnected = true
-                self.onStateChange?(true)
+                // 메인 스레드에서 콜백 호출
+                DispatchQueue.main.async {
+                    self.onStateChange?(true)
+                }
                 print("AI 연결 성공!")
             } else {
                 print("AI 연결 실패")
@@ -204,7 +226,10 @@ class RealtimeAIConnection: NSObject {
         }
         
         isConnected = false
-        onStateChange?(false)
+        // 메인 스레드에서 콜백 호출
+        DispatchQueue.main.async {
+            self.onStateChange?(false)
+        }
         
         print("WebRTC 연결 정리 완료")
     }
@@ -213,6 +238,109 @@ class RealtimeAIConnection: NSObject {
         connectionLock.lock()
         cleanupConnection()
         connectionLock.unlock()
+    }
+    
+    func setCostLimit(_ limit: Double) {
+        costLimit = limit
+    }
+    
+    private func sendConversationsToServer() {
+        guard !conversations.isEmpty else { return }
+        
+        var request = URLRequest(url: serverURL)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let payload: [String: Any] = [
+            "conversations": conversations,
+            "totalCost": currentSessionCost
+        ]
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            
+            URLSession.shared.dataTask(with: request) { data, response, error in
+                if let error = error {
+                    print("서버 전송 에러: \(error.localizedDescription)")
+                    return
+                }
+                
+                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                    print("대화 내용 서버 전송 성공")
+                    // 성공 시 대화 내용 초기화 (선택적)
+                    // self.conversations = []
+                }
+            }.resume()
+        } catch {
+            print("대화 내용 JSON 변환 에러: \(error.localizedDescription)")
+        }
+    }
+    
+    private func stopConversationIfLimitReached(currentCost: Double) {
+        if currentCost >= costLimit {
+            print("비용 제한(\(costLimit)달러)에 도달: 대화 중단")
+            
+            // 데이터 채널을 통해 대화 중단 메시지 전송
+            let stopMessage: [String: Any] = [
+                "type": "session.update",
+                "session": [
+                    "instructions": "곧 통화를 종료해야 합니다. 작별인사를 나누고 최대한 빨리 종료해주세요."
+                ]
+            ]
+
+            do {
+                let jsonData = try JSONSerialization.data(withJSONObject: stopMessage)
+                if let jsonString = String(data: jsonData, encoding: .utf8) {
+                    let buffer = RTCDataBuffer(data: jsonString.data(using: .utf8)!, isBinary: false)
+                    dataChannel?.sendData(buffer)
+                    
+                    // AI가 작별 인사할 시간을 준 후 (5초) 빈 메시지 전송
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                        // 빈 메시지 전송으로 function_call 응답 트리거
+                        let emptyInput: [String: Any] = [
+                            "type": "input.text",
+                            "text": ""
+                        ]
+                        
+                        do {
+                            let inputData = try JSONSerialization.data(withJSONObject: emptyInput)
+                            if let inputString = String(data: inputData, encoding: .utf8) {
+                                let inputBuffer = RTCDataBuffer(data: inputString.data(using: .utf8)!, isBinary: false)
+                                self.dataChannel?.sendData(inputBuffer)
+                            }
+                        } catch {
+                            print("빈 입력 전송 에러: \(error.localizedDescription)")
+                        }
+                        
+                        // 그래도 종료되지 않으면 10초 후 강제 종료
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) {
+                            if self.isConnected {
+                                print("AI가 종료하지 않아 강제 종료합니다.")
+                                // 대화 기록 서버로 전송
+                                self.sendConversationsToServer()
+                                
+                                // 연결 종료
+                                self.disconnect()
+                                
+                                // 통화 종료 - 메인 스레드에서 실행
+                                if let callManager = self.callManager {
+                                    DispatchQueue.main.async {
+                                        callManager.endCall()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch {
+                print("중단 메시지 생성 에러: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    // 콜 매니저 설정 메소드 추가
+    func setCallManager(_ manager: CallManager) {
+        self.callManager = manager
     }
 }
 
@@ -267,7 +395,10 @@ extension RealtimeAIConnection: RTCPeerConnectionDelegate {
         print("ICE 연결 상태 변경: \(newState.rawValue)")
         if newState == .disconnected || newState == .failed || newState == .closed {
             isConnected = false
-            onStateChange?(false)
+            // 메인 스레드에서 콜백 호출
+            DispatchQueue.main.async {
+                self.onStateChange?(false)
+            }
         }
     }
     
@@ -329,6 +460,21 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                             ]
                         */
 
+                        if let type = jsonData["type"] as? String {
+                            if type != "response.audio_transcript.delta" {
+                                print("type: \(type)")
+
+                                do {
+                                    let jsonDataUTF8 = try JSONSerialization.data(withJSONObject: jsonData, options: .prettyPrinted)
+                                    if let jsonString = String(data: jsonDataUTF8, encoding: .utf8) {
+                                        print("jsonData (UTF-8): \n\(jsonString)")
+                                    }
+                                } catch {
+                                        print("JSON 변환 오류: \(error)")
+                                }
+                            }
+                        }
+
                         if let type = jsonData["type"] as? String, type == "input_audio_buffer.speech_started" {
                             if let audioStartMs = jsonData["audio_start_ms"] as? Int {
                                 audioStart = audioStartMs
@@ -341,6 +487,21 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                             }
                         }
 
+                        if let type = jsonData["type"] as? String, type == "conversation.item.input_audio_transcription.completed" {
+                            // print("jsonData: \(jsonData)")
+                            if let transcript = jsonData["transcript"] as? String {
+                                print("음성 입력: \(transcript)\n")
+                                
+                                // 사용자 음성 입력 기록
+                                let userInput: [String: Any] = [
+                                    "role": "user",
+                                    "content": transcript,
+                                    "timestamp": Date().timeIntervalSince1970
+                                ]
+                                conversations.append(userInput)
+                            }
+                        }
+                        
                         if let type = jsonData["type"] as? String, type == "response.done" {
                             // print(jsonData)
                             if let response = jsonData["response"] as? [String: Any],
@@ -380,19 +541,112 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                 
                                 let totalCost = audioInputCost + textInputCost + audioCachedCost + textCachedCost + audioOutputCost + textOutputCost + audioCost
                                 
+                                // 현재 세션 비용 누적
+                                currentSessionCost += totalCost
+                                
                                 print("AI 응답: \(transcript)\n")
                                 print("비용 내역: 오디오 입력=$\(String(format: "%.6f", audioInputCost)), 텍스트 입력=$\(String(format: "%.6f", textInputCost))")
                                 print("         캐시된 오디오=$\(String(format: "%.6f", audioCachedCost)), 캐시된 텍스트=$\(String(format: "%.6f", textCachedCost))")
                                 print("         오디오 출력=$\(String(format: "%.6f", audioOutputCost)), 텍스트 출력=$\(String(format: "%.6f", textOutputCost))")
                                 print("         음성 기록=$\(String(format: "%.6f", audioCost))")
                                 print("총 비용: $\(String(format: "%.6f", totalCost))")
+                                print("누적 비용: $\(String(format: "%.6f", currentSessionCost))")
+                                
+                                // AI 응답 기록
+                                let aiResponse: [String: Any] = [
+                                    "role": "assistant",
+                                    "content": transcript,
+                                    "cost": totalCost,
+                                    "costDetails": [
+                                        "audioInputCost": audioInputCost,
+                                        "textInputCost": textInputCost,
+                                        "audioCachedCost": audioCachedCost,
+                                        "textCachedCost": textCachedCost,
+                                        "audioOutputCost": audioOutputCost,
+                                        "textOutputCost": textOutputCost,
+                                        "audioCost": audioCost
+                                    ],
+                                    "timestamp": Date().timeIntervalSince1970
+                                ]
+                                conversations.append(aiResponse)
+                                
+                                
+                                // 비용 제한 확인 및 필요시 대화 중단
+                                // stopConversationIfLimitReached(currentCost: currentSessionCost)
                             }
                         }
-                        
-                        if let type = jsonData["type"] as? String, type == "conversation.item.input_audio_transcription.completed" {
-                            // print("jsonData: \(jsonData)")
-                            if let transcript = jsonData["transcript"] as? String {
-                                print("음성 입력: \(transcript)\n")
+
+                        if let type = jsonData["type"] as? String, type == "response.function_call_arguments.done" {
+                            print("response.function_call_arguments.done")
+                            if let functionName = jsonData["name"] as? String, 
+                               let callId = jsonData["call_id"] as? String {
+                                if functionName == "endCall" {
+                                    print("endCall 함수 호출")
+                                    
+                                    // 1. 함수 실행 결과를 대화 히스토리에 삽입
+                                    let fnResult = "통화가 종료되었습니다." // 함수 실행 결과
+                                    let item: [String: Any] = [
+                                        "type": "function_call_output",
+                                        "call_id": callId,
+                                        "output": fnResult
+                                    ]
+                                    let payload: [String: Any] = [
+                                        "type": "conversation.item.create",
+                                        "item": item
+                                    ]
+                                    
+                                    do {
+                                        let data = try JSONSerialization.data(withJSONObject: payload)
+                                        let buffer = RTCDataBuffer(data: data, isBinary: false)
+                                        dataChannel.sendData(buffer)
+                                        
+                                        // 2. 모델에 "후속 메시지 생성" 트리거
+                                        let followUp: [String: Any] = ["type": "response.create"]
+                                        let followUpData = try JSONSerialization.data(withJSONObject: followUp)
+                                        let followUpBuffer = RTCDataBuffer(data: followUpData, isBinary: false)
+                                        dataChannel.sendData(followUpBuffer)
+                                        
+                                        // 종료 플래그 설정
+                                        self.pendingEndCall = true
+                                        self.pendingCallManager = self.callManager
+                                        
+                                        // AI가 오디오 출력을 완료할 때까지 기다림
+                                    } catch {
+                                        print("함수 호출 결과 전송 오류: \(error)")
+                                        
+                                        // 오류 발생 시 바로 종료
+                                        disconnect()
+                                        if let callManager = self.callManager {
+                                            DispatchQueue.main.async {
+                                                callManager.endCall()
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                print("call_id가 없는 함수 호출")
+                            }
+                        }
+
+                        // output_audio_buffer.stopped 처리 부분 추가
+                        if let type = jsonData["type"] as? String, type == "output_audio_buffer.stopped" {
+                            print("AI 오디오 출력 종료")
+                            
+                            // 종료 플래그가 설정되어 있으면 실제로 종료 실행
+                            if pendingEndCall {
+                                print("AI 응답 완료 후 종료 실행")
+                                pendingEndCall = false
+                                
+                                // 연결 종료
+                                disconnect()
+                                
+                                // 통화 종료
+                                if let callManager = pendingCallManager {
+                                    DispatchQueue.main.async {
+                                        callManager.endCall()
+                                    }
+                                    pendingCallManager = nil
+                                }
                             }
                         }
                     }
