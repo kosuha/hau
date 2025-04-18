@@ -84,7 +84,7 @@ fastify.get('/api/v1/realtime/sessions', async (request, reply) => {
       {
         type: "function",
         name: "endCall",
-        description: "상대방이 통화 종료의 의사를 밝혔을 경우, 당신이 통화를 종료하려면 함수를 호출하세요."
+        description: "상대방이 통화 종료의 의사를 밝히거나 어떤 이유로 통화를 종료해야하는 경우, 통화를 종료하려면 이 함수를 호출하세요."
       }
     ],
     tool_choice: "auto",

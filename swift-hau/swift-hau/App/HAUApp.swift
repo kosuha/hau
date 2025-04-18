@@ -55,7 +55,6 @@ struct HAUApp: App {
 
                 print("HAUApp: onAppear 실행됨 - 초기 설정 시작.")
                 // 실제 데이터 로딩 및 인증 확인 시작
-                CallManager.shared.setupVoIP()
                 authViewModel.setUserViewModel(userViewModel)
                 authViewModel.checkAuthStatus()
 

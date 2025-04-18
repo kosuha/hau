@@ -11,9 +11,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, PKPushRegistryDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         print("AppDelegate: 앱이 시작되었습니다.")
         
-        // VoIP 푸시 등록
-        registerForVoIPPushes()
-        
         return true
     }
     

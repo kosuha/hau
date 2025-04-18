@@ -440,4 +440,166 @@ class UserViewModel: ObservableObject {
             set: { self.userData.birthdate = $0 }
         )
     }
+
+    // 통화 시간만 조용히 저장 (화면 이탈 방지)
+    func silentlySaveCallTime(_ callTimeJson: String) {
+        // userData만 업데이트
+        userData.callTime = callTimeJson
+        
+        // 원본 데이터도 동기화
+        
+        // 서버에 조용히 저장
+        guard let userId = userId else {
+            print("사용자 ID가 없습니다.")
+            return
+        }
+        
+        Task {
+            do {
+                // 서버로 전송할 최소 데이터 준비
+                let updateData = ["call_time": callTimeJson]
+                
+                // Supabase에 데이터 업데이트
+                print("통화 시간 저장 시도: auth_id=\(userId)")
+                let response = try await client.from("users")
+                    .update(updateData)
+                    .eq("auth_id", value: userId)
+                    .execute()
+
+                print("통화 시간 저장 성공: \(response.status)")
+            } catch {
+                print("통화 시간 저장 오류: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    // 다음 통화 일정을 가져오는 함수
+    func getNextCallSchedule() -> (day: String, time: String, isDayLabel: Bool)? {
+        guard let callTimeJson = userData.callTime,
+              !callTimeJson.isEmpty,
+              let jsonData = callTimeJson.data(using: .utf8) else {
+            return nil
+        }
+        
+        do {
+            // JSON 문자열 디코딩
+            let schedules = try JSONDecoder().decode([[String: String]].self, from: jsonData)
+            if schedules.isEmpty {
+                return nil
+            }
+            
+            // 현재 요일과 시간 가져오기
+            let calendar = Calendar.current
+            let now = Date()
+            let currentWeekday = calendar.component(.weekday, from: now) // 1(일)~7(토)
+            let currentHour = calendar.component(.hour, from: now)
+            let currentMinute = calendar.component(.minute, from: now)
+            
+            // 요일 매핑 (1(일)~7(토) -> "일", "월", ...)
+            let weekdayMapping = [1: "일", 2: "월", 3: "화", 4: "수", 5: "목", 6: "금", 7: "토"]
+            let koreanWeekdayIndex = weekdayMapping[currentWeekday] ?? ""
+            
+            // 요일 순서 (월~일)
+            let weekdayOrder = ["월": 0, "화": 1, "수": 2, "목": 3, "금": 4, "토": 5, "일": 6]
+            
+            // 현재 요일의 인덱스
+            let currentDayIndex = weekdayOrder[koreanWeekdayIndex] ?? 0
+            
+            // 현재 시간 (분 단위)
+            let currentTimeInMinutes = currentHour * 60 + currentMinute
+            
+            // 오늘 중에 남은 일정 찾기
+            var todayLaterSchedules = schedules.filter { schedule in
+                guard let day = schedule["day"], let time = schedule["time"] else { return false }
+                if day != koreanWeekdayIndex { return false }
+                
+                // 시간 파싱
+                let components = time.split(separator: ":")
+                if components.count != 2 { return false }
+                guard let hour = Int(components[0]), let minute = Int(components[1]) else { return false }
+                
+                let scheduleTimeInMinutes = hour * 60 + minute
+                return scheduleTimeInMinutes > currentTimeInMinutes
+            }
+            
+            // 오늘 중에 남은 일정이 있다면, 그 중 가장 빠른 시간 선택
+            if !todayLaterSchedules.isEmpty {
+                todayLaterSchedules.sort { schedule1, schedule2 in
+                    let time1 = schedule1["time"] ?? ""
+                    let time2 = schedule2["time"] ?? ""
+                    return time1 < time2
+                }
+                // 오늘이므로 day를 "오늘"로 설정하고 isDayLabel = true
+                return ("오늘", todayLaterSchedules[0]["time"] ?? "", true)
+            }
+            
+            // 내일 요일 찾기
+            let tomorrowDayIndex = (currentDayIndex + 1) % 7
+            let tomorrowDay = weekdayOrder.first(where: { $0.value == tomorrowDayIndex })?.key ?? ""
+            
+            // 내일 일정 찾기
+            var tomorrowSchedules = schedules.filter { $0["day"] == tomorrowDay }
+            if !tomorrowSchedules.isEmpty {
+                // 내일 중 가장 빠른 시간 선택
+                tomorrowSchedules.sort { schedule1, schedule2 in
+                    let time1 = schedule1["time"] ?? ""
+                    let time2 = schedule2["time"] ?? ""
+                    return time1 < time2
+                }
+                // 내일이므로 day를 "내일"로 설정하고 isDayLabel = true
+                return ("내일", tomorrowSchedules[0]["time"] ?? "", true)
+            }
+            
+            // 모레 이후 요일 순회하며 가장 빠른 일정 찾기
+            for dayOffset in 2...7 {
+                let nextDayIndex = (currentDayIndex + dayOffset) % 7
+                let nextDay = weekdayOrder.first(where: { $0.value == nextDayIndex })?.key ?? ""
+                
+                var nextDaySchedules = schedules.filter { $0["day"] == nextDay }
+                if !nextDaySchedules.isEmpty {
+                    // 해당 요일의 가장 빠른 시간 선택
+                    nextDaySchedules.sort { schedule1, schedule2 in
+                        let time1 = schedule1["time"] ?? ""
+                        let time2 = schedule2["time"] ?? ""
+                        return time1 < time2
+                    }
+                    // 요일로 반환하고 isDayLabel = false
+                    return (nextDaySchedules[0]["day"] ?? "", nextDaySchedules[0]["time"] ?? "", false)
+                }
+            }
+            
+            // 결국 다음 일정이 발견되지 않았다면, 그냥 첫 번째 일정 반환
+            let sortedSchedules = schedules.sorted { schedule1, schedule2 in
+                let day1 = schedule1["day"] ?? ""
+                let day2 = schedule2["day"] ?? ""
+                let dayIndex1 = weekdayOrder[day1] ?? 0
+                let dayIndex2 = weekdayOrder[day2] ?? 0
+                
+                if dayIndex1 == dayIndex2 {
+                    let time1 = schedule1["time"] ?? ""
+                    let time2 = schedule2["time"] ?? ""
+                    return time1 < time2
+                }
+                
+                return dayIndex1 < dayIndex2
+            }
+            
+            // 일반 요일로 반환하고 isDayLabel = false
+            return (sortedSchedules[0]["day"] ?? "", sortedSchedules[0]["time"] ?? "", false)
+            
+        } catch {
+            print("통화 일정 파싱 오류: \(error.localizedDescription)")
+            return nil
+        }
+    }
+    
+    // 다음 통화 일정의 사용자 친화적인 문자열 반환
+    func getNextCallScheduleText() -> String {
+        if let nextSchedule = getNextCallSchedule() {
+            let dayText = nextSchedule.isDayLabel ? nextSchedule.day : "\(nextSchedule.day)요일"
+            return "\(dayText) \(nextSchedule.time)"
+        } else {
+            return "설정된 통화 일정이 없습니다"
+        }
+    }
 }

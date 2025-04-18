@@ -61,6 +61,10 @@ class AuthViewModel: NSObject, ObservableObject {
                     userViewModel.setUserId(user.id.uuidString)
                 }
                 
+                // CallManager에도 사용자 ID 설정하고 VoIP 설정
+                CallManager.shared.setUserId(user.id.uuidString)
+                CallManager.shared.setupVoIP()
+                
                 self.isLoading = false
             }
         } catch {
@@ -170,6 +174,10 @@ class AuthViewModel: NSObject, ObservableObject {
                         Task { await userViewModel.fetchUserData() }
                     }
                     
+                    // CallManager에도 사용자 ID 설정하고 VoIP 설정
+                    CallManager.shared.setUserId(response.user.id.uuidString)
+                    CallManager.shared.setupVoIP()
+                    
                     self.isLoading = false
                 }
             } catch {
@@ -192,6 +200,10 @@ class AuthViewModel: NSObject, ObservableObject {
                 await MainActor.run {
                     self.isLoggedIn = false
                     self.currentUser = nil
+                    
+                    // CallManager 사용자 정보 초기화
+                    CallManager.shared.clearUserId()
+                    
                     self.isLoading = false
                 }
             } catch {

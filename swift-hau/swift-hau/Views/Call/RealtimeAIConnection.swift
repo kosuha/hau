@@ -33,7 +33,7 @@ class RealtimeAIConnection: NSObject {
     // 대화 내용과 비용 기록
     private var conversations: [[String: Any]] = []
     private var currentSessionCost: Double = 0.0
-    private var costLimit: Double = 0.5 // 기본 비용 제한 (0.5달러)
+    private var costLimit: Double = 0.010 // 기본 비용 제한 (0.050달러)
     
     // 서버 통신 URL
     private let serverURL = URL(string: "https://your-api-server.com/conversations")!
@@ -277,65 +277,9 @@ class RealtimeAIConnection: NSObject {
     }
     
     private func stopConversationIfLimitReached(currentCost: Double) {
-        if currentCost >= costLimit {
-            print("비용 제한(\(costLimit)달러)에 도달: 대화 중단")
-            
-            // 데이터 채널을 통해 대화 중단 메시지 전송
-            let stopMessage: [String: Any] = [
-                "type": "session.update",
-                "session": [
-                    "instructions": "곧 통화를 종료해야 합니다. 작별인사를 나누고 최대한 빨리 종료해주세요."
-                ]
-            ]
-
-            do {
-                let jsonData = try JSONSerialization.data(withJSONObject: stopMessage)
-                if let jsonString = String(data: jsonData, encoding: .utf8) {
-                    let buffer = RTCDataBuffer(data: jsonString.data(using: .utf8)!, isBinary: false)
-                    dataChannel?.sendData(buffer)
-                    
-                    // AI가 작별 인사할 시간을 준 후 (5초) 빈 메시지 전송
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
-                        // 빈 메시지 전송으로 function_call 응답 트리거
-                        let emptyInput: [String: Any] = [
-                            "type": "input.text",
-                            "text": ""
-                        ]
-                        
-                        do {
-                            let inputData = try JSONSerialization.data(withJSONObject: emptyInput)
-                            if let inputString = String(data: inputData, encoding: .utf8) {
-                                let inputBuffer = RTCDataBuffer(data: inputString.data(using: .utf8)!, isBinary: false)
-                                self.dataChannel?.sendData(inputBuffer)
-                            }
-                        } catch {
-                            print("빈 입력 전송 에러: \(error.localizedDescription)")
-                        }
-                        
-                        // 그래도 종료되지 않으면 10초 후 강제 종료
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) {
-                            if self.isConnected {
-                                print("AI가 종료하지 않아 강제 종료합니다.")
-                                // 대화 기록 서버로 전송
-                                self.sendConversationsToServer()
-                                
-                                // 연결 종료
-                                self.disconnect()
-                                
-                                // 통화 종료 - 메인 스레드에서 실행
-                                if let callManager = self.callManager {
-                                    DispatchQueue.main.async {
-                                        callManager.endCall()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch {
-                print("중단 메시지 생성 에러: \(error.localizedDescription)")
-            }
-        }
+        // 1) 이미 한 번 트리거했다면 중복 방지
+        guard currentCost >= costLimit, !pendingEndCall else { return }
+        print("비용 제한(\(costLimit)달러)에 도달")
     }
     
     // 콜 매니저 설정 메소드 추가
@@ -460,20 +404,20 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                             ]
                         */
 
-                        if let type = jsonData["type"] as? String {
-                            if type != "response.audio_transcript.delta" {
-                                print("type: \(type)")
+                        // if let type = jsonData["type"] as? String {
+                        //     if type != "response.audio_transcript.delta" {
+                        //         print("type: \(type)")
 
-                                do {
-                                    let jsonDataUTF8 = try JSONSerialization.data(withJSONObject: jsonData, options: .prettyPrinted)
-                                    if let jsonString = String(data: jsonDataUTF8, encoding: .utf8) {
-                                        print("jsonData (UTF-8): \n\(jsonString)")
-                                    }
-                                } catch {
-                                        print("JSON 변환 오류: \(error)")
-                                }
-                            }
-                        }
+                        //         do {
+                        //             let jsonDataUTF8 = try JSONSerialization.data(withJSONObject: jsonData, options: .prettyPrinted)
+                        //             if let jsonString = String(data: jsonDataUTF8, encoding: .utf8) {
+                        //                 print("jsonData (UTF-8): \n\(jsonString)")
+                        //             }
+                        //         } catch {
+                        //                 print("JSON 변환 오류: \(error)")
+                        //         }
+                        //     }
+                        // }
 
                         if let type = jsonData["type"] as? String, type == "input_audio_buffer.speech_started" {
                             if let audioStartMs = jsonData["audio_start_ms"] as? Int {
@@ -571,8 +515,7 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                 conversations.append(aiResponse)
                                 
                                 
-                                // 비용 제한 확인 및 필요시 대화 중단
-                                // stopConversationIfLimitReached(currentCost: currentSessionCost)
+                                
                             }
                         }
 
@@ -648,6 +591,9 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                     pendingCallManager = nil
                                 }
                             }
+
+                            // 비용 제한 확인 및 필요시 대화 중단
+                            // stopConversationIfLimitReached(currentCost: currentSessionCost)
                         }
                     }
                 } catch {

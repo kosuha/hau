@@ -10,6 +10,12 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     @Published var isCallInProgress = false  // 통화 중 또는 통화 알림 진행 중 상태 추적
     @Published var callScreenPresentationID = UUID()
     @Published var userViewModel: UserViewModel = UserViewModel()
+    @Published var callError: String? = nil // 통화 오류 메시지 저장
+    
+    // 사용자 ID 추가
+    private var currentUserId: String? = nil
+    private var hasPendingToken: Bool = false
+    private var pendingToken: String? = nil
     
     // 싱글톤 인스턴스
     static let shared = CallManager()
@@ -18,9 +24,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     private let callController = CXCallController()
     private var pushRegistry: PKPushRegistry?
     private var uuid: UUID?
-    
-    // AI 정보
-    private let aiName = "AI 어시스턴트"
     
     // 서버 API 엔드포인트
     private let serverURL = "http://192.168.0.5:3000/api/v1"
@@ -78,12 +81,14 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
                 print("수신 전화 표시 오류: \(error.localizedDescription)")
                 self.isCallActive = false
                 self.isCallInProgress = false  // 오류 발생 시 상태 초기화
+                self.callError = error.localizedDescription
                 completion?(false)
                 return
             }
             
             print("수신 전화 표시 성공")
             self.isCallActive = true
+            self.callError = nil
             completion?(true)
         }
     }
@@ -126,53 +131,99 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     }
     
     // 서버에 통화 푸시 알림 요청
-    func requestCallPush(receiverID: String) {
+    func requestCallPush() {
+        // 초기 상태 설정
+        self.callError = nil
+        
+        // 사용자 ID 확인
+        guard let userId = currentUserId else {
+            self.callError = "로그인이 필요합니다."
+            print("CallManager: 사용자 ID가 없어 통화 요청을 보낼 수 없습니다.")
+            return
+        }
+        
         // 서버에 보낼 데이터 준비
         let parameters: [String: Any] = [
-            "caller_id": receiverID,
-            "receiver_id": receiverID,
-            "caller_name": userViewModel.selectedVoice
+            "caller_id": userId,  // 발신자 ID는 현재 로그인한 사용자
+            "receiver_id": userId,  // 수신자 ID는 파라미터로 전달받은 값
+            "caller_name": userViewModel.userData.name ?? userViewModel.selectedVoice  // 사용자 이름 또는 선택한 음성
         ]
         
         // 서버 요청 생성
-        guard let url = URL(string: "\(serverURL)/send-call-push") else { return }
+        guard let url = URL(string: "\(serverURL)/send-call-push") else { 
+            self.callError = "유효하지 않은 서버 주소입니다."
+            return 
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 10 // 10초 타임아웃
         
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
         } catch {
             print("JSON 직렬화 오류: \(error.localizedDescription)")
+            self.callError = "요청 처리 중 오류가 발생했습니다."
             return
         }
         
+        print("통화 요청 시작: \(url.absoluteString)")
+        
         // 서버 요청 전송
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                print("서버 요청 오류: \(error.localizedDescription)")
-                return
-            }
+        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            guard let self = self else { return }
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                print("유효하지 않은 응답")
-                return
-            }
-            
-            if httpResponse.statusCode == 200 {
-                print("통화 푸시 요청이 성공적으로 전송되었습니다.")
-                
-                // 테스트를 위해 로컬에서 수신 전화 시뮬레이션
-                // 실제로는 서버에서 푸시 알림을 보내고, 그 알림을 받아서 처리함
-                if let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let success = json["success"] as? Bool, success == true {
-                    print("서버 응답: \(json)")
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("서버 요청 오류: \(error.localizedDescription)")
+                    self.callError = "서버 연결 오류: \(error.localizedDescription)"
+                    print("callError 설정됨: \(self.callError ?? "nil")")
+                    return
                 }
-            } else {
-                print("서버 오류: 상태 코드 \(httpResponse.statusCode)")
                 
-                if let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    print("서버 오류 응답: \(json)")
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    print("유효하지 않은 응답")
+                    self.callError = "서버로부터 유효하지 않은 응답을 받았습니다."
+                    return
+                }
+                
+                print("서버 응답 상태 코드: \(httpResponse.statusCode)")
+                
+                if httpResponse.statusCode == 200 {
+                    print("통화 푸시 요청이 성공적으로 전송되었습니다.")
+                    self.callError = nil
+                    
+                    // 테스트를 위해 로컬에서 수신 전화 시뮬레이션
+                    // 실제로는 서버에서 푸시 알림을 보내고, 그 알림을 받아서 처리함
+                    if let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let success = json["success"] as? Bool, success == true {
+                        print("서버 응답: \(json)")
+                    }
+                } else {
+                    print("서버 오류: 상태 코드 \(httpResponse.statusCode)")
+                    
+                    if let data = data {
+                        do {
+                            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                               let errorMessage = json["error"] as? String {
+                                self.callError = errorMessage
+                                print("오류 메시지: \(errorMessage)")
+                            } else if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                                    let message = json["message"] as? String {
+                                self.callError = message
+                                print("오류 메시지: \(message)")
+                            } else {
+                                let responseString = String(data: data, encoding: .utf8) ?? "데이터 없음"
+                                print("응답 내용: \(responseString)")
+                                self.callError = "서버 오류가 발생했습니다. (코드: \(httpResponse.statusCode))"
+                            }
+                        } catch {
+                            print("응답 파싱 오류: \(error.localizedDescription)")
+                            self.callError = "서버 응답을 처리할 수 없습니다."
+                        }
+                    } else {
+                        self.callError = "서버 오류가 발생했습니다. (코드: \(httpResponse.statusCode))"
+                    }
                 }
             }
         }
@@ -180,11 +231,41 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
         task.resume()
     }
     
+    // 사용자 ID 설정 메서드 (로그인 성공 후 호출)
+    func setUserId(_ userId: String) {
+        print("CallManager: 사용자 ID 설정됨 - \(userId)")
+        currentUserId = userId
+        
+        // 이전에 저장된 토큰이 있으면 사용자 ID와 함께 다시 전송
+        if hasPendingToken, let token = pendingToken {
+            print("CallManager: 보류 중인 토큰을 현재 사용자 ID로 전송합니다.")
+            sendTokenToServer(token)
+            hasPendingToken = false
+            pendingToken = nil
+        }
+    }
+    
+    // 사용자 ID 초기화 (로그아웃 시 호출)
+    func clearUserId() {
+        print("CallManager: 사용자 ID 초기화됨")
+        currentUserId = nil
+        hasPendingToken = false
+        pendingToken = nil
+    }
+    
     // 서버에 토큰 전송 (public으로 변경)
     func sendTokenToServer(_ token: String) {
+        // 사용자 ID가 없으면 토큰을 임시 저장하고 종료
+        guard let userId = currentUserId else {
+            print("CallManager: 사용자 ID가 없어 토큰을 임시 저장합니다.")
+            hasPendingToken = true
+            pendingToken = token
+            return
+        }
+        
         // 서버에 보낼 데이터 준비
         let parameters: [String: Any] = [
-            "user_id": "test_id", // 실제 사용자 ID로 변경
+            "user_id": userId, // 실제 사용자 ID 사용
             "device_token": token,
             "token_type": "voip"
         ]
@@ -201,6 +282,8 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
             print("JSON 직렬화 오류: \(error.localizedDescription)")
             return
         }
+        
+        print("CallManager: 사용자 ID \(userId)로 VoIP 토큰 등록 요청")
         
         // 서버 요청 전송
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
@@ -273,6 +356,13 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
         isCallActive = false
         shouldShowCallScreen = false
         isCallInProgress = false  // 상태 초기화
+    }
+    
+    // 오류 초기화 메서드
+    func resetCallError() {
+        DispatchQueue.main.async {
+            self.callError = nil
+        }
     }
     
     // 통화 상태 리셋 메서드 수정

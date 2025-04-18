@@ -22,6 +22,8 @@ struct AppTheme {
         static let dark = Color(hex: "#191F28")
         static let lightTransparent = Color.white.opacity(0.6)
         static let secondaryLight = Color(hex: "#95BAA1").opacity(0.24)
+        static let error = Color(hex: "#FF4500")
+        static let warning = Color(hex: "#FFA500")
     }
     
     struct Gradients {

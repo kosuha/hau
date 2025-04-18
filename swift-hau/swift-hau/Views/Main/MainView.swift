@@ -13,6 +13,7 @@ struct MainView: View {
     @ObservedObject private var callManager = CallManager.shared
     @State private var showCallViewAsSheet = false
     @State private var showCallRequestAlert = false
+    @State private var showCallErrorAlert = false
     
     enum Destination: Hashable {
         case settings
@@ -71,13 +72,23 @@ struct MainView: View {
                                 }
                                 
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text("언제 통화할까요?")
-                                        .font(.system(size: 16, weight: .bold))
-                                        .foregroundColor(AppTheme.Colors.dark)
                                     
-                                    Text("원하는 시간을 알려주세요.")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(AppTheme.Colors.dark)
+                                    if let nextSchedule = userViewModel.getNextCallSchedule() {
+                                        Text("다음 통화 시간이에요.")
+                                            .font(.system(size: 16, weight: .bold))
+                                            .foregroundColor(AppTheme.Colors.dark)
+                                        let dayText = nextSchedule.isDayLabel ? nextSchedule.day : "\(nextSchedule.day)요일"
+                                        Text("\(dayText) \(nextSchedule.time)에 전화할게요.")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(AppTheme.Colors.dark)
+                                    } else {
+                                        Text("언제 통화할까요?")
+                                            .font(.system(size: 16, weight: .bold))
+                                            .foregroundColor(AppTheme.Colors.dark)
+                                        Text("원하는 시간을 알려주세요.")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(AppTheme.Colors.dark)
+                                    }
                                 }
                                 
                                 Spacer()
@@ -92,8 +103,16 @@ struct MainView: View {
                         
                         // 통화 버튼
                         Button(action: { 
-                            callManager.requestCallPush(receiverID: "test_id")
-                            showCallRequestAlert = true
+                            callManager.callError = nil // 오류 상태 초기화
+                            callManager.requestCallPush()
+                            // 오류 없을 때만 성공 알림 표시
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                if callManager.callError == nil {
+                                    showCallRequestAlert = true
+                                } else {
+                                    showCallErrorAlert = true
+                                }
+                            }
                         }) {
                             HStack(spacing: 10) {
                                 Image(systemName: "phone.fill")
@@ -146,8 +165,24 @@ struct MainView: View {
                 }
                 
                 setupCallScreenObserver()
-                
                 setupCleanupObserver()
+            }
+            .onChange(of: callManager.callError) { newValue in
+                print("callError 변경 감지: \(newValue ?? "nil")")
+                if newValue != nil {
+                    DispatchQueue.main.async {
+                        print("오류 알림 표시 시도")
+                        showCallErrorAlert = true
+                    }
+                }
+            }
+            .alert("통화 요청 오류", isPresented: $showCallErrorAlert) {
+                Button("확인", role: .cancel) { 
+                    // 오류 확인 후 오류 상태 초기화
+                    callManager.callError = nil
+                }
+            } message: {
+                Text(callManager.callError ?? "알 수 없는 오류가 발생했습니다.")
             }
         }
     }
