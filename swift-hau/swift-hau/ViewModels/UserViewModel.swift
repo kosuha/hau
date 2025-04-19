@@ -253,6 +253,15 @@ class UserViewModel: ObservableObject {
         }
     }
     
+    // 음성 설정 조용히 저장 (화면 이탈 방지)
+    func silentlySaveVoiceSetting() {
+        // UserDefaults에 목소리 설정 저장
+        UserDefaults.standard.set(selectedVoice, forKey: keyFor("userVoice"))
+        originalVoice = selectedVoice
+        // userData에도 동기화
+        userData.voice = selectedVoice
+    }
+    
     // 음성 설정 저장
     func saveVoiceSetting() {
         // UserDefaults에 목소리 설정 저장
@@ -439,6 +448,38 @@ class UserViewModel: ObservableObject {
             get: { self.userData.birthdate ?? Date() }, // 기본값으로 현재 날짜 사용 또는 다른 적절한 기본값 설정
             set: { self.userData.birthdate = $0 }
         )
+    }
+
+    // 프로필만 조용히 저장 (화면 이탈 방지)
+    func silentlySaveProfile() {
+        // 서버에 조용히 저장
+        guard let userId = userId else {
+            print("사용자 ID가 없습니다.")
+            return
+        }
+        
+        Task {
+            do {
+                // Supabase에 데이터 업데이트
+                print("프로필 저장 시도: auth_id=\(userId)")
+                let response = try await client.from("users")
+                    .update(userData)
+                    .eq("auth_id", value: userId)
+                    .execute()
+
+                print("프로필 저장 성공: \(response.status)")
+                
+                // 원본 데이터 업데이트 (저장 성공 시점에 원본 데이터 업데이트)
+                await MainActor.run {
+                    self.originalName = self.userData.name
+                    self.originalBirthdate = self.userData.birthdate
+                    self.originalSelfStory = self.userData.selfIntro
+                    self.originalVoice = self.userData.voice ?? "Beomsoo"
+                }
+            } catch {
+                print("프로필 저장 오류: \(error.localizedDescription)")
+            }
+        }
     }
 
     // 통화 시간만 조용히 저장 (화면 이탈 방지)

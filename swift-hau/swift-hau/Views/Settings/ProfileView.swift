@@ -11,11 +11,13 @@ struct ProfileView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject private var userViewModel: UserViewModel
     @EnvironmentObject private var authViewModel: AuthViewModel
+    @Environment(\.presentationMode) var presentationMode
     
     @State private var showDatePicker = false
     @State private var showDiscardAlert = false
     @State private var showLogoutAlert = false
     @State private var showDeleteAccountAlert = false
+    @State private var showSaveCompleteAlert = false
     
     var body: some View {
         VStack(spacing: 16) {
@@ -130,8 +132,8 @@ struct ProfileView: View {
                     
                     // 저장 버튼
                     Button(action: {
-                        userViewModel.saveProfile()
-                        dismiss()
+                        userViewModel.silentlySaveProfile()
+                        showSaveCompleteAlert = true
                     }) {
                         Text("저장하기")
                             .font(.system(size: 16, weight: .bold))
@@ -184,6 +186,13 @@ struct ProfileView: View {
             }
         } message: {
             Text("모든 계정 정보가 삭제되며 복구할 수 없습니다. 정말 탈퇴하시겠습니까?")
+        }
+        
+        // 저장 완료 알림
+        .alert("저장 완료", isPresented: $showSaveCompleteAlert) {
+            Button("확인", role: .cancel) { }
+        } message: {
+            Text("프로필이 성공적으로 저장되었습니다.")
         }
         
         // .onAppear {

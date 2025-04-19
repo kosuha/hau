@@ -74,11 +74,11 @@ struct MainView: View {
                                 VStack(alignment: .leading, spacing: 1) {
                                     
                                     if let nextSchedule = userViewModel.getNextCallSchedule() {
-                                        Text("다음 통화 시간이에요.")
+                                        let dayText = nextSchedule.isDayLabel ? nextSchedule.day : "\(nextSchedule.day)요일"
+                                        Text("\(dayText) \(nextSchedule.time)")
                                             .font(.system(size: 16, weight: .bold))
                                             .foregroundColor(AppTheme.Colors.dark)
-                                        let dayText = nextSchedule.isDayLabel ? nextSchedule.day : "\(nextSchedule.day)요일"
-                                        Text("\(dayText) \(nextSchedule.time)에 전화할게요.")
+                                        Text("통화하기로 한거 잊지않으셨죠?")
                                             .font(.system(size: 16))
                                             .foregroundColor(AppTheme.Colors.dark)
                                     } else {

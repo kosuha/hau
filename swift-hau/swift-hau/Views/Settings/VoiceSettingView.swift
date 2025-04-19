@@ -11,6 +11,7 @@ struct VoiceSettingView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject private var userViewModel: UserViewModel
     @State private var showDiscardAlert = false
+    @State private var showSaveCompleteAlert = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -63,9 +64,9 @@ struct VoiceSettingView: View {
                 
                 // 저장 버튼
                 Button(action: {
-                    userViewModel.saveVoiceSetting()
-                    userViewModel.saveProfile()
-                    dismiss()
+                    userViewModel.silentlySaveVoiceSetting()
+                    userViewModel.silentlySaveProfile()
+                    showSaveCompleteAlert = true
                 }) {
                     Text("저장하기")
                         .font(.system(size: 16, weight: .bold))
@@ -90,6 +91,11 @@ struct VoiceSettingView: View {
             }
         } message: {
             Text("저장하지 않은 내용은 사라집니다.")
+        }
+        .alert("저장 완료", isPresented: $showSaveCompleteAlert) {
+            Button("확인", role: .cancel) { }
+        } message: {
+            Text("목소리 설정이 성공적으로 저장되었습니다.")
         }
         .onAppear {
             userViewModel.beginVoiceEditing()
