@@ -58,7 +58,7 @@ fastify.get('/', async (request, reply) => {
 });
 
 // OpenAI API 세션 생성 엔드포인트
-fastify.get('/api/v1/realtime/sessions', async (request, reply) => {
+fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
   // OpenAI API 키 환경 변수에서 가져오기
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -66,48 +66,99 @@ fastify.get('/api/v1/realtime/sessions', async (request, reply) => {
     return;
   }
 
-  const prompt = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf8');
-
-  // OpenAI API 엔드포인트 및 요청 데이터
-  const url = 'https://api.openai.com/v1/realtime/sessions';
-  const data = {
-    model: 'gpt-4o-mini-realtime-preview',
-    modalities: ['audio', 'text'],
-    instructions: prompt,
-    // 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', and 'verse'
-    voice: 'ash',
-    input_audio_transcription: {
-      language: 'ko',
-      model: 'whisper-1'
-    },
-    tools: [
-      {
-        type: "function",
-        name: "endCall",
-        description: "상대방이 통화 종료의 의사를 밝히거나 어떤 이유로 통화를 종료해야하는 경우, 통화를 종료하려면 이 함수를 호출하세요."
-      }
-    ],
-    tool_choice: "auto",
-  };
-  const headers = {
-    'Authorization': `Bearer ${apiKey}`,
-    'Content-Type': 'application/json',
-  };
-
-  try {
-    // OpenAI API로 POST 요청 보내기
-    const response = await axios.post(url, data, { headers });
-
-    // OpenAI API 응답을 클라이언트로 전달
-    reply.send(response.data);
-  } catch (error) {
-    fastify.log.error(error.response ? error.response.data : error.message); // 에러 로깅 개선
-    // 에러 응답 처리
-    reply.code(error.response ? error.response.status : 500).send({
-      error: 'OpenAI API 요청 중 오류가 발생했습니다.',
-      details: error.response ? error.response.data : error.message,
-    });
+  // 기본 프롬프트 가져오기
+  const basePrompt = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf8');
+  
+  // 클라이언트에서 보낸 사용자 정보 추출
+  const { user_name, birthdate, self_intro, voice, history, language = 'ko' } = request.body || {};
+  
+  // 사용자 정보를 프롬프트에 추가
+  let customPrompt = basePrompt;
+  
+  // 사용자별 맞춤형 프롬프트 작성
+  if (user_name) {
+    customPrompt = customPrompt.replace(/상대방/g, `${user_name}님`);
   }
+  
+  // 사용자 정보 섹션 추가
+  let userInfo = "\n\n'''";
+  userInfo += "\n[사용자 정보]";
+  if (user_name) userInfo += `\n- 사용자의 이름은 "${user_name}"입니다.`;
+  if (birthdate) userInfo += `\n- 사용자의 생년월일은 "${birthdate}"입니다.`;
+  if (self_intro) userInfo += `\n- 사용자 소개: "${self_intro}"`;
+  userInfo += "\n'''";
+
+    let historyString = ""; // 새로운 변수 선언
+    if (history) {
+        // Supabase에서 가져온 history 배열을 문자열로 변환
+        const historyText = history.map(record => 
+            `- ${record.created_at}: ${record.transcript || '내용 없음'}`
+        ).join("\n");
+        historyString = `\n\n[이전 통화 기록]\n${historyText}`;
+    }
+    console.log("history", historyString);
+
+    let background = "";
+    if (voice === "Beomsoo") {
+        background = "당신의 이름은 '범수'이며 30대 중반 남성이고 직업은 드라마 PD입니다.\n"
+    } else if (voice === "Jinjoo") {
+        background = "당신의 이름은 '진주'이며 30대 초반 여성이고 직업은 드라마 작가입니다.\n"
+    }
+    
+    // 최종 프롬프트 생성
+    const finalPrompt = background + customPrompt + userInfo + historyString; // 수정된 변수 사용
+    
+    console.log(`사용자 설정: 이름=${user_name}, 음성=${voice || 'ash'}, 언어=${language}`);
+
+    let apiVoice = 'ash';
+    if (voice === "Beomsoo") {
+        apiVoice = "ash";
+    } else if (voice === "Jinjoo") {
+        apiVoice = "alloy";
+    } else {
+        apiVoice = voice || "ash";
+    }
+    
+    // OpenAI API 엔드포인트 및 요청 데이터
+    const url = 'https://api.openai.com/v1/realtime/sessions';
+    const data = {
+        model: 'gpt-4o-mini-realtime-preview',
+        modalities: ['audio', 'text'],
+        instructions: finalPrompt,
+        // 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', and 'verse'
+        voice: apiVoice,
+        input_audio_transcription: {
+            language: language,
+            model: 'whisper-1'
+        },
+        tools: [
+            {
+                type: "function",
+                name: "endCall",
+                description: "상대방이 통화 종료의 의사를 밝히거나 어떤 이유로 통화를 종료해야하는 경우, 통화를 종료하려면 이 함수를 호출하세요."
+            }
+        ],
+        tool_choice: "auto",
+    };
+    const headers = {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+    };
+
+    try {
+        // OpenAI API로 POST 요청 보내기
+        const response = await axios.post(url, data, { headers });
+
+        // OpenAI API 응답을 클라이언트로 전달
+        reply.send(response.data);
+    } catch (error) {
+        fastify.log.error(error.response ? error.response.data : error.message); // 에러 로깅 개선
+        // 에러 응답 처리
+        reply.code(error.response ? error.response.status : 500).send({
+            error: 'OpenAI API 요청 중 오류가 발생했습니다.',
+            details: error.response ? error.response.data : error.message,
+        });
+    }
 });
 
 // 토큰 등록 엔드포인트

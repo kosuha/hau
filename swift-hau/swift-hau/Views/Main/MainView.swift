@@ -153,6 +153,7 @@ struct MainView: View {
             } content: {
                 CallView()
                     .id(callManager.callScreenPresentationID)
+                    .environmentObject(userViewModel)
             }
             .alert("통화 요청 완료", isPresented: $showCallRequestAlert) {
                 Button("확인", role: .cancel) { }

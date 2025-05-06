@@ -9,10 +9,14 @@ import SwiftUI
 import PushKit
 import CallKit
 import AVFoundation
+import Supabase
 
 struct CallView: View {
     @StateObject private var callManager = CallManager.shared
     @Environment(\.dismiss) private var dismiss
+    
+    // UserViewModel 주입
+    @EnvironmentObject var userViewModel: UserViewModel
     
     // 통화 준비 상태 추적
     @State private var callState: CallState = .preparing
@@ -84,7 +88,9 @@ struct CallView: View {
                     // 통화 시작 시 상태를 '준비 중'으로 설정
                     callState = .preparing
                     // AI 연결 시작
-                    connectAI()
+                    Task {
+                        await connectAI()
+                    }
                 } else {
                     // 통화가 종료되면 AI 연결도 종료
                     disconnectAI()
@@ -94,7 +100,9 @@ struct CallView: View {
             .onChange(of: callManager.shouldShowCallScreen) { newValue in
                 if newValue == true {
                     callState = .preparing
-                    connectAI()
+                    Task {
+                        await connectAI()
+                    }
                 } else {
                     disconnectAI()
                     callState = .disconnected
@@ -111,24 +119,92 @@ struct CallView: View {
         }
     }
     
-    private func getTempToken() -> [String: Any]? {
+    private func getTempToken() async -> [String: Any]? {
         // 서버에 요청하여 openai 임시 토큰 발급
-        let semaphore = DispatchSemaphore(value: 0)
         var resultData: [String: Any]? = nil
         
-        let url = URL(string: "http://192.168.0.5:3000/api/v1/realtime/sessions")!
-        URLSession.shared.dataTask(with: url) { data, response, error in
-            if let data = data, error == nil {
-                resultData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            }
-            semaphore.signal()
-        }.resume()
+        // 통화 설정 데이터 준비
+        var callSettings: [String: Any] = [
+            "language": "ko", // 사용할 언어
+            "user_name": userViewModel.userData.name ?? "사용자",  // 사용자 이름
+            "history": []
+        ]
         
-        _ = semaphore.wait(timeout: .now() + 10)
+        // 사용자 정보 추가
+        if let birthdate = userViewModel.userData.birthdate {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            callSettings["birthdate"] = formatter.string(from: birthdate)
+        }
+        
+        if let selfIntro = userViewModel.userData.selfIntro {
+            callSettings["self_intro"] = selfIntro
+        }
+        
+        if let voice = userViewModel.userData.voice {
+            callSettings["voice"] = voice
+        }
+        
+        // Supabase에서 통화 기록 가져오기
+        do {
+            guard let session = try? await client.auth.session else {
+                print("세션 정보를 가져올 수 없습니다.")
+                return nil
+            }
+            
+            let userId = session.user.id.uuidString
+            print("통화 기록 조회: 사용자 ID=\(userId)")
+            
+            // history 테이블에서 해당 사용자의 최근 3개 통화 기록 조회
+            let response = try await client
+                .from("history")
+                .select("created_at, transcript")
+                .eq("auth_id", value: userId)
+                .order("created_at", ascending: false)
+                .limit(3)
+                .execute()
+            
+            if let jsonString = String(data: response.data, encoding: .utf8) {
+                print("통화 기록 응답: \(jsonString)")
+            }
+            
+            // 응답 JSON을 파싱해서 history 배열 생성
+            if let jsonArray = try? JSONSerialization.jsonObject(with: response.data, options: []) as? [[String: Any]] {
+                print("통화 기록 설정 완료: \(jsonArray.count)개 기록")
+                callSettings["history"] = jsonArray
+            } else {
+                print("통화 기록 파싱 실패")
+                callSettings["history"] = []
+            }
+        } catch {
+            print("통화 기록 조회 오류: \(error.localizedDescription)")
+        }
+        
+        // POST 요청 준비
+        let url = URL(string: "http://192.168.0.5:3000/api/v1/realtime/sessions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        do {
+            // 설정 값을 요청 본문에 포함
+            request.httpBody = try JSONSerialization.data(withJSONObject: callSettings)
+            
+            // URLSession을 async/await 방식으로 사용
+            let (data, _) = try await URLSession.shared.data(for: request)
+            
+            if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                resultData = jsonObject
+                print("서버 응답: \(String(describing: resultData))")
+            }
+        } catch {
+            print("토큰 요청 오류: \(error.localizedDescription)")
+        }
+        
         return resultData
     }
 
-    private func connectAI() {
+    private func connectAI() async {
         print("AI 연결 시작...")
         callState = .preparing
         
@@ -159,17 +235,17 @@ struct CallView: View {
         
         // 딜레이 추가 - 연결 해제가 완료되도록
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            // 서버에 요청하여 openai 임시 토큰 발급
-            let data = self.getTempToken()
-            
-            if let data = data,
-               let clientSecret = data["client_secret"] as? [String: Any],
-               let tokenValue = clientSecret["value"] as? String {
+            // 서버에 통화 설정을 포함하여 요청 전송
+            Task {
+                let serverResponse = await self.getTempToken()
                 
-                // 통화 기록 시작
-                Task {
+                if let serverResponse = serverResponse,
+                   let clientSecret = serverResponse["client_secret"] as? [String: Any],
+                   let tokenValue = clientSecret["value"] as? String {
+                    
+                    // 통화 기록 생성 및 WebRTC 연결 초기화
                     do {
-                        // 통화 기록 생성이 완료될 때까지 기다림
+                        // 통화 기록 생성
                         await RealtimeAIConnection.shared.startCall()
                         
                         // WebRTC 연결 초기화
@@ -185,11 +261,11 @@ struct CallView: View {
                             }
                         }
                     } catch {
-                        print("통화 기록 생성 실패: \(error.localizedDescription)")
+                        print("통화 시작 실패: \(error.localizedDescription)")
                     }
+                } else {
+                    print("서버 응답 처리 실패")
                 }
-            } else {
-                print("토큰 발급 실패")
             }
         }
     }
