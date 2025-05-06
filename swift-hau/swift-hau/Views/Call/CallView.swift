@@ -166,16 +166,26 @@ struct CallView: View {
                let clientSecret = data["client_secret"] as? [String: Any],
                let tokenValue = clientSecret["value"] as? String {
                 
-                // WebRTC 연결 초기화
-                RealtimeAIConnection.shared.initialize(with: tokenValue) { success in
-                    DispatchQueue.main.async {
-                        if success {
-                            print("AI 연결 성공!")
-                            self.callState = .connected
-                        } else {
-                            print("AI 연결 실패")
-                            // 연결 실패 시에도 통화 상태는 유지 (재시도 가능성)
+                // 통화 기록 시작
+                Task {
+                    do {
+                        // 통화 기록 생성이 완료될 때까지 기다림
+                        await RealtimeAIConnection.shared.startCall()
+                        
+                        // WebRTC 연결 초기화
+                        let success = await RealtimeAIConnection.shared.initialize(with: tokenValue)
+                        
+                        DispatchQueue.main.async {
+                            if success {
+                                print("AI 연결 성공!")
+                                self.callState = .connected
+                            } else {
+                                print("AI 연결 실패")
+                                // 연결 실패 시에도 통화 상태는 유지 (재시도 가능성)
+                            }
                         }
+                    } catch {
+                        print("통화 기록 생성 실패: \(error.localizedDescription)")
                     }
                 }
             } else {

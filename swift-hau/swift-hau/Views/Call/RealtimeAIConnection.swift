@@ -9,6 +9,7 @@ import Foundation
 import WebRTC
 import AVFoundation
 import CallKit
+import Supabase
 
 class RealtimeAIConnection: NSObject {
     static let shared = RealtimeAIConnection()
@@ -20,6 +21,9 @@ class RealtimeAIConnection: NSObject {
     private var localMediaStream: RTCMediaStream?
     private var isInitialized = false
     private var connectionLock = NSLock() // 연결 동기화용 락
+    
+    // 현재 통화 ID
+    private var currentCallId: Int64?
     
     // 오디오 관련 변수들을 클래스 본문으로 이동
     private var audioStart: Int = 0
@@ -45,6 +49,21 @@ class RealtimeAIConnection: NSObject {
     private var pendingEndCall: Bool = false
     private var pendingCallManager: CallManager? = nil
     
+    // 통화 기록 구조체
+    private struct HistoryRecord: Encodable {
+        let transcript: String
+        let summary: String
+        let auth_id: String
+    }
+    
+    // 통화 기록 응답 구조체
+    private struct HistoryResponse: Decodable {
+        let id: Int64
+        let transcript: String
+        let summary: String
+        let auth_id: String
+    }
+    
     private override init() {
         super.init()
         // 앱 시작 시 한 번만 SSL 초기화
@@ -58,7 +77,7 @@ class RealtimeAIConnection: NSObject {
         RTCCleanupSSL()
     }
     
-    func initialize(with ephemeralKey: String, completion: @escaping (Bool) -> Void) {
+    func initialize(with ephemeralKey: String) async -> Bool {
         // 동기화 락 사용
         connectionLock.lock()
         
@@ -84,23 +103,25 @@ class RealtimeAIConnection: NSObject {
         setupDataChannel()
         
         // SDP 오퍼 생성 및 전송
-        createAndSendOffer(ephemeralKey: ephemeralKey) { success in
-            self.connectionLock.unlock()
-            
-            if success {
-                self.isConnected = true
-                // 메인 스레드에서 콜백 호출
-                DispatchQueue.main.async {
-                    self.onStateChange?(true)
+        return await withCheckedContinuation { continuation in
+            createAndSendOffer(ephemeralKey: ephemeralKey) { success in
+                self.connectionLock.unlock()
+                
+                if success {
+                    self.isConnected = true
+                    // 메인 스레드에서 콜백 호출
+                    DispatchQueue.main.async {
+                        self.onStateChange?(true)
+                    }
+                    print("AI 연결 성공!")
+                } else {
+                    print("AI 연결 실패")
+                    // 실패 시 연결 정리
+                    self.cleanupConnection()
                 }
-                print("AI 연결 성공!")
-            } else {
-                print("AI 연결 실패")
-                // 실패 시 연결 정리
-                self.cleanupConnection()
+                
+                continuation.resume(returning: success)
             }
-            
-            completion(success)
         }
     }
     
@@ -286,6 +307,86 @@ class RealtimeAIConnection: NSObject {
     func setCallManager(_ manager: CallManager) {
         self.callManager = manager
     }
+
+    // 통화 시작 시 호출되는 메서드
+    func startCall() async {
+        print("startCall")
+        conversations = []
+        do {
+            let session = try await client.auth.session
+            let userId = session.user.id.uuidString
+            print("userId: \(userId)")
+
+            let newHistory = HistoryRecord(
+                transcript: "",
+                summary: "",
+                auth_id: userId
+            )
+
+            print("insert 요청: \(newHistory)")
+            let result = try await client
+                .from("history")
+                .insert(newHistory)
+                .select()
+                .single()
+                .execute()
+
+            print("Supabase 응답 전체: \(result)")
+            
+            // JSON 데이터로 직접 파싱
+            let data = result.data
+            if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
+               let id = json["id"] as? Int64 {
+                currentCallId = id
+                print("새로운 통화 기록 생성 완료: \(id)")
+            } else {
+                print("통화 기록 생성 실패: 응답 데이터 파싱 실패")
+            }
+        } catch {
+            print("통화 기록 생성 오류: \(error)")
+        }
+    }
+
+    // 통화 내용을 Supabase에 저장하는 메서드
+    private func saveConversationToSupabase(transcript: String) {
+        print("통화 기록 저장 시작: \(currentCallId)")
+        guard let callId = currentCallId else { return }
+        
+        Task {
+            do {
+                print("통화 기록 업데이트 시작: \(callId)")
+                // history 테이블에서 해당 통화 ID의 레코드를 찾아 transcript 업데이트
+                let query = client
+                    .from("history")
+                    .select()
+                    .eq("id", value: String(callId))
+                    .single()
+                
+                let result = try await query.execute()
+                
+                // JSON 데이터로 직접 파싱
+                let data = result.data
+                if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
+                   let currentTranscript = json["transcript"] as? String {
+                    // 기존 transcript에 새로운 내용 추가
+                    let updatedTranscript = currentTranscript + "\n" + transcript
+                    
+                    // 업데이트 쿼리 실행
+                    try await client
+                        .from("history")
+                        .update(["transcript": updatedTranscript])
+                        .eq("id", value: String(callId))
+                        .execute()
+                    
+                    print("통화 기록 업데이트 완료: \(callId)")
+                } else {
+                    print("기존 transcript 가져오기 실패")
+                }
+            } catch {
+                print("Supabase 저장 오류: \(error.localizedDescription)")
+            }
+        }
+    }
 }
 
 // MARK: - RTCPeerConnectionDelegate
@@ -443,6 +544,9 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                     "timestamp": Date().timeIntervalSince1970
                                 ]
                                 conversations.append(userInput)
+                                
+                                // Supabase에 저장
+                                saveConversationToSupabase(transcript: "사용자: \(transcript)")
                             }
                         }
                         
@@ -514,8 +618,8 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                 ]
                                 conversations.append(aiResponse)
                                 
-                                
-                                
+                                // Supabase에 저장
+                                saveConversationToSupabase(transcript: "AI: \(transcript)")
                             }
                         }
 
