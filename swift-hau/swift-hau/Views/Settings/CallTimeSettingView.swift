@@ -140,7 +140,7 @@ struct CallTimeSettingView: View {
                 .alert("시간 간격 확인", isPresented: $showTimeConflictAlert) {
                     Button("확인", role: .cancel) { }
                 } message: {
-                    Text("같은 날의 다른 통화 일정과 최소 10분 이상 차이가 나야 합니다.")
+                    Text("같은 날의 다른 통화 일정과 최소 60분 이상 차이가 나야 합니다.")
                 }
             } else {
                 ScheduleSettingModal(
@@ -167,7 +167,7 @@ struct CallTimeSettingView: View {
                 .alert("시간 간격 확인", isPresented: $showTimeConflictAlert) {
                     Button("확인", role: .cancel) { }
                 } message: {
-                    Text("같은 날의 다른 통화 일정과 최소 10분 이상 차이가 나야 합니다.")
+                    Text("같은 날의 다른 통화 일정과 최소 60분 이상 차이가 나야 합니다.")
                 }
             }
         }
@@ -176,7 +176,7 @@ struct CallTimeSettingView: View {
         }
     }
     
-    // 시간 간격이 10분 이내인지 확인
+    // 시간 간격이 60분 이내인지 확인
     private func isTimeConflict(day: String, time: String, existingTimes: [[String: String]]) -> Bool {
         // 시간 문자열을 분으로 변환
         let newTimeMinutes = timeStringToMinutes(time)
@@ -184,14 +184,14 @@ struct CallTimeSettingView: View {
         // 같은 요일의 시간들만 필터링
         let sameDayTimes = existingTimes.filter { $0["day"] == day }
         
-        // 10분 이내에 다른 일정이 있는지 확인
+        // 60분 이내에 다른 일정이 있는지 확인
         for existingTime in sameDayTimes {
             if let timeStr = existingTime["time"] {
                 let existingTimeMinutes = timeStringToMinutes(timeStr)
                 let diff = abs(existingTimeMinutes - newTimeMinutes)
                 
-                if diff < 10 {
-                    return true // 10분 이내에 다른 일정이 있음
+                if diff < 60 {
+                    return true // 60분 이내에 다른 일정이 있음
                 }
             }
         }
@@ -400,7 +400,7 @@ struct ScheduleSettingModal: View {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(AppTheme.Colors.warning)
-                    Text("다른 통화 일정과 최소 10분 이상 차이가 나야 합니다.")
+                    Text("다른 통화 일정과 최소 60분 이상 차이가 나야 합니다.")
                         .font(.system(size: 14))
                         .foregroundColor(AppTheme.Colors.warning)
                 }
