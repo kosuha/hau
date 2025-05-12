@@ -98,27 +98,34 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
         let endCallAction = CXEndCallAction(call: uuid)
         let transaction = CXTransaction(action: endCallAction)
         
+        // CallKit에 종료 요청
         callController.request(transaction) { error in
+            print("CallManager: endCall transaction completion. Error: \(error?.localizedDescription ?? "nil")")
+            
             if let error = error {
-                print("통화 종료 오류: \(error.localizedDescription)")
-            } else {
-                print("통화 종료 성공")
-                
-                // 화면 상태 초기화 먼저 수행
-                self.shouldShowCallScreen = false
-                
-                // 약간의 지연 후 상태 완전 초기화
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                print("CallManager: 통화 종료 요청 오류: \(error.localizedDescription)")
+                // 오류 발생 시에도 상태는 초기화 (메인 스레드에서)
+                DispatchQueue.main.async {
+                    self.shouldShowCallScreen = false
                     self.isCallActive = false
                     self.isCallInProgress = false
-                    
-                    // 화면 스택 정리 알림 전송
-                    NotificationCenter.default.post(name: NSNotification.Name("CleanupCallScreen"), object: nil)
-                    
-                    // AI 연결도 종료
-                    if RealtimeAIConnection.shared.isConnected {
-                        RealtimeAIConnection.shared.disconnect()
-                    }
+                }
+            } else {
+                print("CallManager: 통화 종료 요청 성공")
+                
+                // *** 수정: shouldShowCallScreen 업데이트에 딜레이 추가 ***
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { // 0.5초 딜레이
+                    self.shouldShowCallScreen = false // 화면 전환 트리거
+                    print("CallManager: Setting shouldShowCallScreen = false on main thread after delay")
+                }
+                
+                // 나머지 상태 업데이트 및 AI 연결 종료는 딜레이 없이 즉시 수행
+                self.isCallActive = false
+                self.isCallInProgress = false
+                
+                if RealtimeAIConnection.shared.isConnected {
+                    print("CallManager: Disconnecting AI connection...")
+                    RealtimeAIConnection.shared.disconnect()
                 }
             }
         }
@@ -311,16 +318,19 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     func providerDidReset(_ provider: CXProvider) {
         // 제공자가 재설정되었을 때 호출됨
+        // 원복: 상태 초기화 유지, 연결 종료는 endCall에서 처리하므로 제거
         isCallActive = false
         shouldShowCallScreen = false
-        isCallInProgress = false  // 상태 초기화
+        isCallInProgress = false
+        // RealtimeAIConnection.shared.disconnect() 제거
+        print("CallManager: Provider 리셋됨, 상태 초기화")
     }
     
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
         // 사용자가 전화를 받았을 때
         isCallActive = true
         shouldShowCallScreen = true
-        isCallInProgress = true  // 통화 중 상태 설정
+        isCallInProgress = true
         
         // 메인 스레드에서 UI 업데이트 확보
         DispatchQueue.main.async {
@@ -331,22 +341,34 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     }
     
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
-        // 사용자가 전화를 종료했을 때
-        isCallActive = false
-        shouldShowCallScreen = false
-        isCallInProgress = false  // 상태 초기화
+        // 사용자가 전화를 종료했을 때 (또는 시스템에 의해 종료될 때)
+        // *** 로그 추가 ***
+        print("CallManager: provider(_:perform: CXEndCallAction) called for UUID: \(action.callUUID)")
         action.fulfill()
     }
     
     // 통화가 활성화될 때 (오디오 세션 관련)
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         // 오디오 세션이 활성화되었을 때
-        print("오디오 세션 활성화됨")
+        print("CallManager: CXProvider가 오디오 세션 활성화를 요청함")
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            print("CallManager: AVAudioSession 활성화 성공")
+        } catch {
+            print("CallManager: AVAudioSession 활성화 오류: \(error.localizedDescription)")
+        }
     }
     
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
         // 오디오 세션이 비활성화되었을 때
-        print("오디오 세션 비활성화됨")
+        print("CallManager: CXProvider가 오디오 세션 비활성화를 요청함")
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            print("CallManager: AVAudioSession 비활성화 성공")
+        } catch {
+            print("CallManager: AVAudioSession 비활성화 오류: \(error.localizedDescription)")
+        }
+        // 원복: AI 연결 종료 로직 제거 (endCall completion에서 처리)
     }
     
     // 사용자가 통화를 거부했을 때 (통화 UI에서 "거부" 버튼을 누른 경우)

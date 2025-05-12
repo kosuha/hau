@@ -149,8 +149,6 @@ struct MainView: View {
                 }
             }
             .fullScreenCover(isPresented: $showCallViewAsSheet) {
-                callManager.resetCallStatus()
-            } content: {
                 CallView()
                     .id(callManager.callScreenPresentationID)
                     .environmentObject(userViewModel)
@@ -166,7 +164,6 @@ struct MainView: View {
                 }
                 
                 setupCallScreenObserver()
-                setupCleanupObserver()
             }
             .onChange(of: callManager.callError) { newValue in
                 print("callError 변경 감지: \(newValue ?? "nil")")
@@ -176,6 +173,13 @@ struct MainView: View {
                         showCallErrorAlert = true
                     }
                 }
+            }
+            .onChange(of: callManager.shouldShowCallScreen) { newValue in
+                if !newValue {
+                    print("MainView: onChange detected shouldShowCallScreen is false. Setting showCallViewAsSheet = false.")
+                    showCallViewAsSheet = false
+                }
+                // newValue가 true일 때는 setupCallScreenObserver에서 처리하므로 별도 로직 필요 없음
             }
             .alert("통화 요청 오류", isPresented: $showCallErrorAlert) {
                 Button("확인", role: .cancel) { 
@@ -197,19 +201,6 @@ struct MainView: View {
             queue: .main) { _ in
                 DispatchQueue.main.async {
                     showCallViewAsSheet = true
-                }
-            }
-    }
-    
-    private func setupCleanupObserver() {
-        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("CleanupCallScreen"), object: nil)
-        
-        NotificationCenter.default.addObserver(
-            forName: NSNotification.Name("CleanupCallScreen"),
-            object: nil,
-            queue: .main) { _ in
-                DispatchQueue.main.async {
-                    showCallViewAsSheet = false
                 }
             }
     }

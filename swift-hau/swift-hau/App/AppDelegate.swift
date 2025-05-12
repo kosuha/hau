@@ -11,7 +11,24 @@ class AppDelegate: NSObject, UIApplicationDelegate, PKPushRegistryDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         print("AppDelegate: 앱이 시작되었습니다.")
         
+        // 오디오 세션 설정
+        configureAudioSession()
+        
         return true
+    }
+    
+    // 오디오 세션 설정 함수
+    private func configureAudioSession() {
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            // 카테고리 및 모드 설정 (VoIP 통신에 적합하게)
+            try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .duckOthers])
+            try audioSession.setPreferredIOBufferDuration(0.005) // 낮은 버퍼 지연 설정 (선택 사항)
+            try audioSession.setActive(false) // 시작 시 비활성화 상태 유지
+            print("AppDelegate: 오디오 세션 설정 완료")
+        } catch {
+            print("AppDelegate: 오디오 세션 설정 오류: \(error.localizedDescription)")
+        }
     }
     
     // VoIP 푸시 등록

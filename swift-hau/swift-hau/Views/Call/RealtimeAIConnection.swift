@@ -11,6 +11,11 @@ import AVFoundation
 import CallKit
 import Supabase
 
+// 알림 이름 정의
+extension Notification.Name {
+    static let aiAudioDebugUpdate = Notification.Name("aiAudioDebugUpdateNotification")
+}
+
 class RealtimeAIConnection: NSObject {
     static let shared = RealtimeAIConnection()
     
@@ -138,15 +143,37 @@ class RealtimeAIConnection: NSObject {
     }
     
     private func setupLocalAudioTrack() {
+        print("setupLocalAudioTrack: 시작")
         let audioConstrains = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
-        let audioSource = factory?.audioSource(with: audioConstrains)
-        audioTrack = factory?.audioTrack(with: audioSource!, trackId: "audio0")
-        
+        guard let audioSource = factory?.audioSource(with: audioConstrains) else {
+            print("setupLocalAudioTrack: ERROR - 오디오 소스 생성 실패")
+            return
+        }
+        print("setupLocalAudioTrack: 오디오 소스 생성됨")
+
+        audioTrack = factory?.audioTrack(with: audioSource, trackId: "audio0")
+        guard let currentAudioTrack = audioTrack else {
+            print("setupLocalAudioTrack: ERROR - 오디오 트랙 생성 실패")
+            return
+        }
+        print("setupLocalAudioTrack: 오디오 트랙 생성됨 (ID: \(currentAudioTrack.trackId), Enabled: \(currentAudioTrack.isEnabled))") // 상태 확인
+
         let streamId = "stream0"
-        let localStream = factory?.mediaStream(withStreamId: streamId)
-        localStream?.addAudioTrack(audioTrack!)
-        
-        peerConnection?.add(audioTrack!, streamIds: [streamId])
+        guard let localStream = factory?.mediaStream(withStreamId: streamId) else {
+             print("setupLocalAudioTrack: ERROR - 로컬 미디어 스트림 생성 실패")
+             return
+        }
+        print("setupLocalAudioTrack: 로컬 미디어 스트림 생성됨 (ID: \(streamId))")
+
+        localStream.addAudioTrack(currentAudioTrack)
+        print("setupLocalAudioTrack: 오디오 트랙 로컬 스트림에 추가됨")
+
+        guard let pc = peerConnection else {
+             print("setupLocalAudioTrack: ERROR - PeerConnection이 nil 상태")
+             return
+        }
+        pc.add(currentAudioTrack, streamIds: [streamId])
+        print("setupLocalAudioTrack: 오디오 트랙 PeerConnection에 추가됨")
     }
     
     private func setupDataChannel() {
@@ -393,18 +420,39 @@ class RealtimeAIConnection: NSObject {
 extension RealtimeAIConnection: RTCPeerConnectionDelegate {
     func peerConnectionDidStartCommunication(_ peerConnection: RTCPeerConnection) {
         print("통신이 시작되었습니다")
+        NotificationCenter.default.post(name: .aiAudioDebugUpdate, object: nil, userInfo: ["message": "AI: PeerConnection 통신 시작됨"])
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didStartReceivingOn transceiver: RTCRtpTransceiver) {
         print("수신 시작됨: \(transceiver.mid ?? "unknown")")
+        NotificationCenter.default.post(name: .aiAudioDebugUpdate, object: nil, userInfo: ["message": "AI: PeerConnection 수신 시작됨 (mid: \(transceiver.mid ?? "unknown"))"])
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
         print("데이터 채널 열림: \(dataChannel.label)")
+        NotificationCenter.default.post(name: .aiAudioDebugUpdate, object: nil, userInfo: ["message": "AI: 데이터 채널 열림 (label: \(dataChannel.label))"])
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCPeerConnectionState) {
         print("PeerConnection 상태 변경: \(newState.rawValue)")
+        var stateMessage = ""
+        switch newState {
+        case .new:
+            stateMessage = "new"
+        case .connecting:
+            stateMessage = "connecting"
+        case .connected:
+            stateMessage = "connected"
+        case .disconnected:
+            stateMessage = "disconnected"
+        case .failed:
+            stateMessage = "failed"
+        case .closed:
+            stateMessage = "closed"
+        @unknown default:
+            stateMessage = "unknown"
+        }
+        NotificationCenter.default.post(name: .aiAudioDebugUpdate, object: nil, userInfo: ["message": "AI: PeerConnection 상태 변경 - \(stateMessage)"])
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didAdd receiver: RTCRtpReceiver, streams mediaStreams: [RTCMediaStream]) {
@@ -434,13 +482,53 @@ extension RealtimeAIConnection: RTCPeerConnectionDelegate {
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {
         print("신호 상태 변경: \(stateChanged.rawValue)")
+        var stateMessage = ""
+        switch stateChanged {
+        case .stable:
+            stateMessage = "stable"
+        case .haveLocalOffer:
+            stateMessage = "haveLocalOffer"
+        case .haveLocalPrAnswer:
+            stateMessage = "haveLocalPrAnswer"
+        case .haveRemoteOffer:
+            stateMessage = "haveRemoteOffer"
+        case .haveRemotePrAnswer:
+            stateMessage = "haveRemotePrAnswer"
+        case .closed:
+            stateMessage = "closed"
+        @unknown default:
+            stateMessage = "unknown"
+        }
+        NotificationCenter.default.post(name: .aiAudioDebugUpdate, object: nil, userInfo: ["message": "AI: Signaling 상태 변경 - \(stateMessage)"])
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
         print("ICE 연결 상태 변경: \(newState.rawValue)")
+        var stateMessage = ""
+        switch newState {
+        case .new:
+            stateMessage = "new"
+        case .checking:
+            stateMessage = "checking"
+        case .connected:
+            stateMessage = "connected (ICE)"
+        case .completed:
+            stateMessage = "completed (ICE)"
+        case .failed:
+            stateMessage = "failed (ICE)"
+        case .disconnected:
+            stateMessage = "disconnected (ICE)"
+        case .closed:
+            stateMessage = "closed (ICE)"
+        case .count:
+             stateMessage = "count (ICE)" // 이 케이스는 보통 사용되지 않음
+        @unknown default:
+            stateMessage = "unknown (ICE)"
+        }
+        NotificationCenter.default.post(name: .aiAudioDebugUpdate, object: nil, userInfo: ["message": "AI: ICE 연결 상태 변경 - \(stateMessage)"])
+        
         if newState == .disconnected || newState == .failed || newState == .closed {
             isConnected = false
-            // 메인 스레드에서 콜백 호출
             DispatchQueue.main.async {
                 self.onStateChange?(false)
             }
@@ -460,65 +548,93 @@ extension RealtimeAIConnection: RTCPeerConnectionDelegate {
 extension RealtimeAIConnection: RTCDataChannelDelegate {
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
         print("데이터 채널 상태 변경: \(dataChannel.readyState.rawValue)")
+        var stateMessage = ""
+        switch dataChannel.readyState {
+        case .connecting:
+            stateMessage = "connecting"
+        case .open:
+            stateMessage = "open"
+        case .closing:
+            stateMessage = "closing"
+        case .closed:
+            stateMessage = "closed"
+        @unknown default:
+            stateMessage = "unknown"
+        }
+        NotificationCenter.default.post(name: .aiAudioDebugUpdate, object: nil, userInfo: ["message": "AI: 데이터 채널 상태 변경 (label: \(dataChannel.label)) - \(stateMessage)"])
     }
     
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
         if let message = String(data: buffer.data, encoding: .utf8) {
-            // print("데이터 채널 메시지 수신: \(message)")
+            // print("데이터 채널 메시지 수신: \\(message)")
             if let json = message.data(using: .utf8) {
                 do {
                     if let jsonData = try JSONSerialization.jsonObject(with: json, options: []) as? [String: Any] {
-                        /*
-                            gpt-4o-mini-realtime-preview audio
-                            input
-                            $10.00 = 1,000,000 tokens (1 token = $0.000010)
-                            cached
-                            $0.30 = 1,000,000 tokens (1 token = $0.0000003)
-                            output
-                            $20.00 = 1,000,000 tokens (1 token = $0.000020)
-
-                            gpt-4o-mini-realtime-preview text
-                            input
-                            $0.60 = 1,000,000 tokens (1 token = $0.0000006)
-                            cached
-                            $0.30 = 1,000,000 tokens (1 token = $0.0000003)
-                            output
-                            $2.40 = 1,000,000 tokens (1 token = $0.0000024)
                         
-                            [
-                                "input_token_details": {
-                                    "audio_tokens" = 728;
-                                    "cached_tokens" = 1408;
-                                    "cached_tokens_details" = {
-                                        "audio_tokens" = 640;
-                                        "text_tokens" = 768;
-                                    };
-                                    "text_tokens" = 801;
-                                }, 
-                                "output_token_details": {
-                                    "audio_tokens" = 255;
-                                    "text_tokens" = 75;
-                                }, 
-                                "total_tokens": 1859, 
-                                "output_tokens": 330, 
-                                "input_tokens": 1529
-                            ]
-                        */
+                        // 알림을 보낼 메시지
+                        var debugMessage: String? = nil
 
-                        // if let type = jsonData["type"] as? String {
-                        //     if type != "response.audio_transcript.delta" {
-                        //         print("type: \(type)")
-
-                        //         do {
-                        //             let jsonDataUTF8 = try JSONSerialization.data(withJSONObject: jsonData, options: .prettyPrinted)
-                        //             if let jsonString = String(data: jsonDataUTF8, encoding: .utf8) {
-                        //                 print("jsonData (UTF-8): \n\(jsonString)")
-                        //             }
-                        //         } catch {
-                        //                 print("JSON 변환 오류: \(error)")
-                        //         }
-                        //     }
-                        // }
+                        if let type = jsonData["type"] as? String {
+                            switch type {
+                            case "input_audio_buffer.speech_started":
+                                debugMessage = "AI: 음성 입력 시작 감지"
+                                if let audioStartMs = jsonData["audio_start_ms"] as? Int {
+                                    audioStart = audioStartMs
+                                }
+                            case "input_audio_buffer.speech_stopped":
+                                debugMessage = "AI: 음성 입력 종료 감지"
+                                if let audioEndMs = jsonData["audio_end_ms"] as? Int {
+                                    audioEnd = audioEndMs
+                                    // audioDuration 계산 추가 (필요시)
+                                    audioDuration = audioEnd - audioStart
+                                }
+                            case "conversation.item.input_audio_transcription.completed":
+                                if let transcript = jsonData["transcript"] as? String {
+                                    // 큰따옴표 제거하여 단순화
+                                    debugMessage = "AI: 음성 텍스트 변환 완료 - \(transcript)"
+                                    print("음성 입력: \(transcript)\n")
+                                    
+                                    // 사용자 음성 입력 기록
+                                    let userInput: [String: Any] = [
+                                        "role": "user",
+                                        "content": transcript,
+                                        "timestamp": Date().timeIntervalSince1970
+                                    ]
+                                    conversations.append(userInput)
+                                    
+                                    // Supabase에 저장
+                                    saveConversationToSupabase(transcript: "사용자: \(transcript)")
+                                } else {
+                                    debugMessage = "AI: 음성 텍스트 변환 완료 (내용 없음)"
+                                }
+                            case "response.audio_transcript.delta":
+                                // 델타 업데이트는 너무 빈번하므로 디버그 메시지 생략
+                                break
+                            case "response.done":
+                                // AI 응답 완료 시 (텍스트만 있는 경우)
+                                if let response = jsonData["response"] as? [String: Any],
+                                   let output = response["output"] as? [[String: Any]],
+                                   let messageContent = output.first?["content"] as? [[String: Any]],
+                                   let transcript = messageContent.first?["transcript"] as? String {
+                                    debugMessage = "AI: 응답 완료 - \(transcript)"
+                                    // ... 기존 비용 계산 및 저장 로직 ...
+                                }
+                            case "output_audio_buffer.started":
+                                 debugMessage = "AI: 응답 오디오 재생 시작"
+                            case "output_audio_buffer.stopped":
+                                 debugMessage = "AI: 응답 오디오 재생 종료"
+                                 // ... 기존 종료 처리 로직 ...
+                            default:
+                                // 다른 타입의 메시지는 일단 무시 (필요시 추가)
+                                break
+                            }
+                            
+                            // 디버그 메시지가 있으면 알림 발송
+                            if let msg = debugMessage {
+                                print("AI Debug: \(msg)") // 콘솔에도 로그 출력
+                                NotificationCenter.default.post(name: .aiAudioDebugUpdate, object: nil, userInfo: ["message": msg])
+                            }
+                        }
 
                         if let type = jsonData["type"] as? String, type == "input_audio_buffer.speech_started" {
                             if let audioStartMs = jsonData["audio_start_ms"] as? Int {
