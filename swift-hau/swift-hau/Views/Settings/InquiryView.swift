@@ -6,13 +6,13 @@
 //
 
 import SwiftUI
-import MessageUI
 
 struct InquiryView: View {
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var userViewModel: UserViewModel
     @State private var inquiryType: InquiryType = .general
     @State private var inquiryText: String = ""
-    @State private var isShowingMailView = false
+    @State private var emailText: String = ""
     @State private var isShowingAlert = false
     @State private var alertMessage = ""
     
@@ -37,7 +37,7 @@ struct InquiryView: View {
             ScrollView {
                 VStack(spacing: 24) {
                     // 안내 텍스트
-                    Text("궁금한 점이나 개선사항이 있으신가요?\n아래 양식을 작성해 주시면 빠르게 답변 드리겠습니다.")
+                    Text("궁금한 점이나 개선사항이 있으신가요?\n아래 양식을 작성해 주시면 빠르게 답변 드리겠습니다.\n개발자에게 직접 문의하고 싶으시다면 okeydokekim@gmail.com으로 이메일을 보내셔도 좋습니다.")
                         .font(.system(size: 16))
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -54,6 +54,22 @@ struct InquiryView: View {
                             }
                         }
                         .pickerStyle(SegmentedPickerStyle())
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    // 이메일 입력
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("답변 받을 이메일")
+                            .font(.system(size: 16, weight: .bold))
+                        
+                        TextField("이메일 주소를 입력해 주세요", text: $emailText)
+                            .keyboardType(.emailAddress)
+                            .autocapitalization(.none)
+                            .padding(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(AppTheme.Colors.placeholder, lineWidth: 1)
+                            )
                     }
                     .padding(.horizontal, 20)
                     
@@ -95,10 +111,10 @@ struct InquiryView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
-                            .background(inquiryText.count >= 10 ? AppTheme.Colors.primary : AppTheme.Colors.disabled)
+                            .background(isValidInput() ? AppTheme.Colors.primary : AppTheme.Colors.disabled)
                             .cornerRadius(999)
                     }
-                    .disabled(inquiryText.count < 10)
+                    .disabled(!isValidInput())
                     .padding(.horizontal, 20)
                     .padding(.bottom, 20)
                 }
@@ -106,9 +122,6 @@ struct InquiryView: View {
         }
         .background(Color.white.edgesIgnoringSafeArea(.all))
         .navigationBarHidden(true)
-        .sheet(isPresented: $isShowingMailView) {
-            MailView(isShowing: $isShowingMailView, result: handleMailResult)
-        }
         .alert(isPresented: $isShowingAlert) {
             Alert(
                 title: Text("알림"),
@@ -118,83 +131,73 @@ struct InquiryView: View {
         }
     }
     
+    // 입력 유효성 검사 함수
+    private func isValidInput() -> Bool {
+        return inquiryText.count >= 10 && isValidEmail(emailText)
+    }
+    
+    // 이메일 유효성 검사 (간단한 형식)
+    private func isValidEmail(_ email: String) -> Bool {
+        let emailRegEx = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,64}"
+        let emailPred = NSPredicate(format:"SELF MATCHES %@", emailRegEx)
+        return emailPred.evaluate(with: email)
+    }
+    
     // 문의 제출 함수
     private func submitInquiry() {
+        if !isValidEmail(emailText) {
+            alertMessage = "유효한 이메일 주소를 입력해 주세요."
+            isShowingAlert = true
+            return
+        }
+        
         if inquiryText.count < 10 {
             alertMessage = "문의 내용은 최소 10자 이상 입력해 주세요."
             isShowingAlert = true
             return
         }
         
-        if MFMailComposeViewController.canSendMail() {
-            isShowingMailView = true
-        } else {
-            alertMessage = "이메일을 보낼 수 없습니다. 이메일 설정을 확인해 주세요."
-            isShowingAlert = true
-        }
+        // Supabase에 문의 저장
+        saveInquiryToSupabase(type: inquiryType, email: emailText, content: inquiryText)
     }
     
-    // 메일 결과 처리
-    private func handleMailResult(_ result: Result<MFMailComposeResult, Error>) {
-        switch result {
-        case .success(let result):
-            switch result {
-            case .sent:
-                alertMessage = "문의가 성공적으로 전송되었습니다."
-                isShowingAlert = true
-                inquiryText = ""
-            case .saved:
-                alertMessage = "문의가 임시 저장되었습니다."
-                isShowingAlert = true
-            case .cancelled:
-                break
-            case .failed:
-                alertMessage = "문의 전송에 실패했습니다. 다시 시도해 주세요."
-                isShowingAlert = true
-            @unknown default:
-                break
-            }
-        case .failure:
-            alertMessage = "문의 전송에 실패했습니다. 다시 시도해 주세요."
-            isShowingAlert = true
+    // Supabase에 문의 저장
+    private func saveInquiryToSupabase(type: InquiryType, email: String, content: String) {
+        // Supabase에 전송할 데이터 모델 정의
+        struct InquiryData: Encodable {
+            let type: String
+            let email: String
+            let content: String
+            let user_id: String?
         }
-    }
-}
 
-// 메일 컴포저 뷰
-struct MailView: UIViewControllerRepresentable {
-    @Binding var isShowing: Bool
-    var result: (Result<MFMailComposeResult, Error>) -> Void
-    
-    func makeUIViewController(context: Context) -> MFMailComposeViewController {
-        let composer = MFMailComposeViewController()
-        composer.mailComposeDelegate = context.coordinator
-        composer.setToRecipients(["support@example.com"])
-        composer.setSubject("HAU 앱 문의")
-        composer.setMessageBody("문의 내용을 입력해 주세요.", isHTML: false)
-        return composer
-    }
-    
-    func updateUIViewController(_ uiViewController: MFMailComposeViewController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
-        var parent: MailView
-        
-        init(_ parent: MailView) {
-            self.parent = parent
-        }
-        
-        func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
-            if let error = error {
-                parent.result(.failure(error))
-            } else {
-                parent.result(.success(result))
+        // 현재 로그인한 사용자의 ID 가져오기 (UserModel의 authId 사용)
+        let currentUserId = userViewModel.userData.authId
+
+        let inquiryData = InquiryData(type: type.rawValue, email: email, content: content, user_id: currentUserId)
+
+        Task {
+            do {
+                try await client.database
+                    .from("inquiries")
+                    .insert(inquiryData)
+                    .execute()
+
+                await MainActor.run {
+                    alertMessage = "문의가 성공적으로 제출되었습니다."
+                    isShowingAlert = true
+                    inquiryText = ""
+                    emailText = ""
+                }
+                print("Supabase에 문의 저장 성공: \(inquiryData)")
+
+            } catch {
+                await MainActor.run {
+                    alertMessage = "문의 제출에 실패했습니다: \(error.localizedDescription)"
+                    isShowingAlert = true
+                }
+                print("Supabase에 문의 저장 실패: \(error)")
             }
-            parent.isShowing = false
         }
     }
 }

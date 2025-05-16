@@ -257,9 +257,9 @@ async function sendVoipPushNotification(fastifyInstance, receiverVoipToken, payl
 
 // 통화 푸시 알림 전송 엔드포인트
 fastify.post('/api/v1/send-call-push', async (request, reply) => {
-  const { caller_id, receiver_id, caller_name } = request.body;
+  const { caller_id, receiver_id } = request.body;
 
-  if (!caller_id || !receiver_id || !caller_name) {
+  if (!caller_id || !receiver_id) {
     return reply.code(400).send({ error: 'caller_id, receiver_id, caller_name은 필수입니다.' });
   }
 
@@ -270,16 +270,17 @@ fastify.post('/api/v1/send-call-push', async (request, reply) => {
     try {
       const { data: receiverUser, error: fetchError } = await supabase
         .from('users')
-        .select('voip_token')
+        .select('voip_token, voice')
         .eq('auth_id', receiver_id)
         .single();
 
-      if (fetchError || !receiverUser || !receiverUser.voip_token) {
+      if (fetchError || !receiverUser || !receiverUser.voip_token || !receiverUser.voice) {
         fastify.log.error(`[send-call-push] 수신자(ID: ${receiver_id}) 토큰 조회 실패 또는 없음:`, fetchError || '토큰 없음');
         return;
       }
       receiverVoipToken = receiverUser.voip_token;
-
+      caller_name = receiverUser.voice;
+      
       const payload = {
         aps: { 'content-available': 1, 'sound': 'default' }, // 'sound'는 VoIP 알림 시 시스템 소리/진동 유도
         uuid: callUUID, // 통화 식별자 (클라이언트에서 CallKit 시작 시 사용)

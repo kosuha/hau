@@ -153,7 +153,7 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
         let parameters: [String: Any] = [
             "caller_id": userId,  // 발신자 ID는 현재 로그인한 사용자
             "receiver_id": userId,  // 수신자 ID는 파라미터로 전달받은 값
-            "caller_name": userViewModel.userData.name ?? userViewModel.selectedVoice  // 사용자 이름 또는 선택한 음성
+            "caller_name": "HAU"  // 사용자 이름 또는 선택한 음성
         ]
         
         // 서버 요청 생성

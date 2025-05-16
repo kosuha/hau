@@ -76,7 +76,7 @@ struct CallView: View {
                         }
 
                         // 통화 상대
-                        Text("범수")
+                        Text(userViewModel.userData.voice ?? "HAU")
                             .font(.system(size: 32, weight: .bold))
                             .foregroundColor(AppTheme.Colors.light)
 
@@ -294,11 +294,13 @@ struct CallView: View {
                let clientSecret = serverResponse["client_secret"] as? [String: Any],
                let tokenValue = clientSecret["value"] as? String {
                 
-                do {
-                    print("CallView: RealtimeAIConnection.startCall 호출 시작")
-                    await RealtimeAIConnection.shared.startCall()
-                    print("CallView: RealtimeAIConnection.startCall 호출 완료")
-                    
+                // RealtimeAIConnection.startCall() 호출하고 결과 확인
+                print("CallView: RealtimeAIConnection.startCall 호출 시작")
+                let canStartCall = await RealtimeAIConnection.shared.startCall()
+                print("CallView: RealtimeAIConnection.startCall 호출 완료. 결과: \(canStartCall)")
+                
+                if canStartCall {
+                    // startCall이 true를 반환한 경우 (포인트 충분 등)에만 initialize 호출
                     print("CallView: RealtimeAIConnection.initialize 호출 시작")
                     let initSuccess = await RealtimeAIConnection.shared.initialize(with: tokenValue)
                     
@@ -309,24 +311,30 @@ struct CallView: View {
                                 self.callState = .connected
                             }
                         }
-                        
                     } else {
+                        // initialize 실패
                         DispatchQueue.main.async {
                             print("CallView: AI initialization failed. Setting callState = .disconnected and triggering dismiss.")
                             self.callState = .disconnected
-                            self.callManager.shouldShowCallScreen = false
+                            self.callManager.shouldShowCallScreen = false // 화면 닫기
+                            // 사용자에게 알림 (예: "AI 서버 연결에 실패했습니다.")
                         }
                     }
-                    
-                } catch {
-                    print("CallView: Error during startCall or initialize: \(error). Setting callState = .disconnected and triggering dismiss.")
+                } else {
+                    // startCall이 false를 반환한 경우 (포인트 부족 등)
                     DispatchQueue.main.async {
+                        print("CallView: 포인트 부족 또는 사전 확인 실패로 통화 시작 안 함. Setting callState = .disconnected and triggering dismiss.")
                         self.callState = .disconnected
-                        self.callManager.shouldShowCallScreen = false
+                        self.callManager.shouldShowCallScreen = false // 화면 닫기
+                        // 사용자에게 알림 (예: "포인트가 부족하여 통화를 시작할 수 없습니다.")
+                        // 여기에 사용자 알림 로직 추가 가능 (e.g., Alert)
                     }
                 }
+                // getTempToken은 성공하고 startCall/initialize에서 문제가 생기는 경우를 다룹니다.
+                // getTempToken 자체가 실패하면 바깥 else에서 처리됩니다.
                 
             } else {
+                // 토큰 가져오기 실패 처리
                 print("CallView: Failed to get ephemeralKey(tokenValue). Setting callState = .disconnected and triggering dismiss.")
                 DispatchQueue.main.async {
                     self.callState = .disconnected

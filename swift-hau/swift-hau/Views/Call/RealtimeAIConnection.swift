@@ -16,6 +16,11 @@ extension Notification.Name {
     static let aiAudioDebugUpdate = Notification.Name("aiAudioDebugUpdateNotification")
 }
 
+// Supabase 응답을 디코딩하기 위한 구조체
+private struct CurrentPointsResponse: Decodable {
+    let points: Int
+}
+
 class RealtimeAIConnection: NSObject {
     static let shared = RealtimeAIConnection()
     
@@ -29,6 +34,7 @@ class RealtimeAIConnection: NSObject {
     
     // 현재 통화 ID
     private var currentCallId: Int64?
+    private var currentAuthId: String? // 사용자 인증 ID 저장
     
     // 오디오 관련 변수들을 클래스 본문으로 이동
     private var audioStart: Int = 0
@@ -336,18 +342,78 @@ class RealtimeAIConnection: NSObject {
     }
 
     // 통화 시작 시 호출되는 메서드
-    func startCall() async {
+    // 반환 타입을 Bool로 변경하여 포인트 부족 시 실패를 알림
+    func startCall() async -> Bool {
         print("startCall")
-        conversations = []
+        
+        // currentAuthId를 startCall 시작 시점에 session으로부터 가져오도록 수정
         do {
             let session = try await client.auth.session
-            let userId = session.user.id.uuidString
-            print("userId: \(userId)")
+            self.currentAuthId = session.user.id.uuidString
+            print("사용자 인증 ID 설정: \(self.currentAuthId ?? "없음")")
+        } catch {
+            print("startCall 오류: 사용자 세션 정보를 가져오는데 실패했습니다 - \(error.localizedDescription)")
+            return false // 세션 정보 없으면 시작 불가
+        }
 
+        // authId 재확인 (위에서 설정되었으므로 nil이 아니어야 함)
+        guard let currentAuthUserId = self.currentAuthId else {
+            print("startCall 오류: 사용자 인증 ID가 없습니다.")
+            return false
+        }
+
+        // 1. 사용자 포인트 확인
+        do {
+            print("사용자 포인트 확인 중... 사용자 ID: \(currentAuthUserId)")
+            let response = try await client // PostgrestResponse를 받도록 변경
+                .from("user_monthly_points")
+                .select("points")
+                .eq("user_id", value: currentAuthUserId)
+                .limit(1) // 최대 1개의 레코드만 가져오도록 제한
+                .execute()
+
+            // 데이터를 [CurrentPointsResponse] 배열로 디코딩 시도
+            // response.data가 비어있는 경우 빈 배열로 디코딩되거나 오류 발생 가능성에 따라 처리
+            var pointsResponse: CurrentPointsResponse? = nil
+            if !response.data.isEmpty {
+                let pointsResponses = try JSONDecoder().decode([CurrentPointsResponse].self, from: response.data)
+                pointsResponse = pointsResponses.first // 첫 번째 요소 가져오기 (없으면 nil)
+            } else {
+                 // 데이터가 비어있으면 pointsResponse는 nil로 유지
+                 print("포인트 조회 결과 데이터가 비어있습니다. 사용자 ID: \(currentAuthUserId)")
+            }
+
+            if pointsResponse == nil {
+                print("startCall 실패: 사용자 ID \(currentAuthUserId)에 대한 포인트 레코드가 없어 통화를 시작할 수 없습니다.")
+                return false // 데이터(포인트 레코드)가 없어서 통화 시작 실패
+            }
+
+            // 레코드가 있으면 실제 포인트 값 확인
+            // pointsResponse가 nil이 아니므로 강제 언래핑 사용 가능 (위에서 nil 체크됨)
+            let currentPoints = pointsResponse!.points 
+            print("현재 사용자 포인트: \(currentPoints)")
+
+            if currentPoints <= 0 {
+                print("포인트 부족(\(currentPoints) 포인트)으로 통화를 시작할 수 없습니다.")
+                return false // 포인트 부족 시 false 반환
+            }
+        } catch {
+            print("startCall 오류: 사용자 포인트를 가져오는데 실패했습니다 - \(error.localizedDescription)")
+            // 포인트 조회 실패 시 통화 시작을 막을지, 아니면 일단 진행하고 나중에 차감 시도할지 정책 필요
+            // 여기서는 일단 실패로 간주하고 false 반환
+            return false
+        }
+
+        // 포인트가 충분하면 통화 기록 생성 및 나머지 로직 진행
+        print("포인트 충분. 통화 기록 생성 시작...")
+        conversations = [] // 대화 내용 초기화
+        
+        do {
+            // 사용자 ID는 위에서 이미 currentAuthUserId로 가져왔으므로 재사용
             let newHistory = HistoryRecord(
                 transcript: "",
                 summary: "",
-                auth_id: userId
+                auth_id: currentAuthUserId 
             )
 
             print("insert 요청: \(newHistory)")
@@ -371,6 +437,97 @@ class RealtimeAIConnection: NSObject {
             }
         } catch {
             print("통화 기록 생성 오류: \(error)")
+            return false // 통화 기록 생성 중 오류 발생
+        }
+
+        return true // 통화 기록 생성 성공
+    }
+
+    // Supabase에서 사용자 포인트 업데이트 및 부족 시 통화 종료 처리
+    private func updateUserPoints(pointsToDeduct: Int) async {
+        guard let authId = self.currentAuthId else {
+            print("포인트 차감 오류: 사용자 인증 ID를 찾을 수 없습니다.")
+            CallManager.shared.callError = "사용자 정보를 확인할 수 없어 포인트 차감에 실패했습니다."
+            return
+        }
+
+        guard pointsToDeduct > 0 else {
+            print("차감할 포인트가 없습니다.")
+            return
+        }
+
+        print("포인트 차감 시도: \(pointsToDeduct) 포인트, 사용자 ID: \(authId)")
+
+        do {
+            let response = try await client
+                .from("user_monthly_points")
+                .select("points")
+                .eq("user_id", value: authId)
+                .limit(1)
+                .execute()
+
+            var currentPointsResult: CurrentPointsResponse? = nil
+            if !response.data.isEmpty {
+                let currentPointsResults = try JSONDecoder().decode([CurrentPointsResponse].self, from: response.data)
+                currentPointsResult = currentPointsResults.first
+            } else {
+                print("포인트 업데이트 중 조회 결과 데이터가 비어있습니다. 사용자 ID: \(authId)")
+                CallManager.shared.callError = "포인트 정보를 업데이트하는 중 문제가 발생했습니다 (코드: UPU-ND)."
+                disconnect()
+                if let manager = self.callManager {
+                    DispatchQueue.main.async { manager.endCall() }
+                }
+                return
+            }
+
+            guard let unwrappedPointsResult = currentPointsResult else {
+                print("포인트 차감 오류: 사용자 ID \(authId)에 대한 포인트 레코드를 찾을 수 없습니다. 통화를 종료합니다.")
+                CallManager.shared.callError = "포인트 정보를 찾을 수 없어 통화가 중단되었습니다 (코드: UPU-NR)."
+                disconnect()
+                if let manager = self.callManager {
+                    DispatchQueue.main.async { manager.endCall() }
+                }
+                return
+            }
+
+            let currentPoints = unwrappedPointsResult.points
+            print("현재 포인트: \(currentPoints)")
+
+            let newPoints = currentPoints - pointsToDeduct
+
+            if newPoints < 0 {
+                print("포인트 부족! 현재 포인트: \(currentPoints), 필요 포인트: \(pointsToDeduct). 통화를 종료합니다.")
+                CallManager.shared.callError = "무료 사용량을 모두 소진하여 통화가 중단되었습니다. 무료 사용량은 매월 1일 초기화됩니다."
+                
+                try await client
+                    .from("user_monthly_points")
+                    .update(["points": 0])
+                    .eq("user_id", value: authId)
+                    .execute()
+                
+                disconnect()
+                if let manager = self.callManager {
+                    DispatchQueue.main.async {
+                        manager.endCall()
+                    }
+                }
+            } else {
+                try await client
+                    .from("user_monthly_points")
+                    .update(["points": newPoints])
+                    .eq("user_id", value: authId)
+                    .execute()
+                print("포인트 차감 완료. 새로운 포인트: \(newPoints)")
+                CallManager.shared.callError = nil // 성공적인 차감 후에는 기존 오류 메시지 클리어
+            }
+        } catch {
+            print("Supabase 포인트 업데이트/조회 오류: \(error.localizedDescription)")
+            CallManager.shared.callError = "포인트 처리 중 오류가 발생하여 통화가 중단될 수 있습니다: \(error.localizedDescription)"
+            // 오류 발생 시에도 통화가 계속 진행되지 않도록 종료 처리하는 것이 안전할 수 있습니다.
+            // disconnect()
+            // if let manager = self.callManager {
+            //    DispatchQueue.main.async { manager.endCall() }
+            // }
         }
     }
 
@@ -412,6 +569,66 @@ class RealtimeAIConnection: NSObject {
             } catch {
                 print("Supabase 저장 오류: \(error.localizedDescription)")
             }
+        }
+    }
+
+    // 포인트만 확인하는 함수
+    public func checkSufficientPoints() async -> Bool { // 접근 제어 수준을 public으로 명시하거나 생략(internal)
+        // currentAuthId 설정 (startCall과 유사하게 세션에서 가져오기)
+        do {
+            let session = try await client.auth.session
+            self.currentAuthId = session.user.id.uuidString
+        } catch {
+            print("checkSufficientPoints 오류: 사용자 세션 정보를 가져오는데 실패했습니다 - \(error.localizedDescription)")
+            // MainView에서 이 오류를 사용자에게 알릴 수 있도록 CallManager 등을 통해 오류 전달 고려
+            // callManager.callError = "사용자 정보를 확인할 수 없습니다." 
+            return false
+        }
+        
+        guard let currentAuthUserId = self.currentAuthId else {
+            print("checkSufficientPoints 오류: 사용자 인증 ID가 없습니다.")
+            // callManager.callError = "사용자 인증 정보를 찾을 수 없습니다."
+            return false
+        }
+
+        print("checkSufficientPoints: 사용자 포인트 확인 중... 사용자 ID: \(currentAuthUserId)")
+        do {
+            let response = try await client
+                .from("user_monthly_points")
+                .select("points")
+                .eq("user_id", value: currentAuthUserId)
+                .limit(1)
+                .execute()
+
+            var pointsResponse: CurrentPointsResponse? = nil
+            if !response.data.isEmpty {
+                let pointsResponses = try JSONDecoder().decode([CurrentPointsResponse].self, from: response.data)
+                pointsResponse = pointsResponses.first
+            }
+
+            if pointsResponse == nil {
+                print("checkSufficientPoints: 사용자 ID \(currentAuthUserId)에 대한 포인트 레코드가 없습니다.")
+                // MainView에서 알림을 위해 CallManager를 통해 오류 메시지 설정 가능
+                // CallManager.shared.callError = "포인트 정보를 찾을 수 없습니다. 고객센터에 문의해주세요."
+                return false 
+            }
+
+            let currentPoints = pointsResponse!.points
+            print("checkSufficientPoints: 현재 사용자 포인트: \(currentPoints)")
+
+            if currentPoints <= 0 {
+                print("checkSufficientPoints: 포인트 부족(\(currentPoints) 포인트).")
+                CallManager.shared.callError = "무료 사용량을 모두 소진하셨습니다. 무료 사용량은 매월 1일 초기화됩니다."
+                return false
+            }
+            
+            print("checkSufficientPoints: 포인트 충분함 (\(currentPoints) 포인트).")
+            return true // 포인트 충분
+
+        } catch {
+            print("checkSufficientPoints 오류: 사용자 포인트를 가져오는데 실패했습니다 - \(error.localizedDescription)")
+            CallManager.shared.callError = "포인트 조회 중 오류가 발생했습니다."
+            return false // 오류 발생 시 실패로 간주
         }
     }
 }
@@ -670,8 +887,8 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                             // print(jsonData)
                             if let response = jsonData["response"] as? [String: Any],
                                let output = response["output"] as? [[String: Any]],
-                               let message = output.first?["content"] as? [[String: Any]],
-                               let transcript = message.first?["transcript"] as? String,
+                               let messageContent = output.first?["content"] as? [[String: Any]],
+                               let transcript = messageContent.first?["transcript"] as? String,
                                let usage = response["usage"] as? [String: Any],
                                let inputTokens = usage["input_token_details"] as? [String: Any],
                                let inputAudioTokens = inputTokens["audio_tokens"] as? Int,
@@ -708,12 +925,16 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                 // 현재 세션 비용 누적
                                 currentSessionCost += totalCost
                                 
+                                // 비용을 포인트로 변환 (0.000001 달러당 1 포인트)
+                                let pointsToDeduct = Int(totalCost / 0.000001)
+
+                                debugMessage = "AI: 응답 완료 - \(transcript)"
                                 print("AI 응답: \(transcript)\n")
                                 print("비용 내역: 오디오 입력=$\(String(format: "%.6f", audioInputCost)), 텍스트 입력=$\(String(format: "%.6f", textInputCost))")
                                 print("         캐시된 오디오=$\(String(format: "%.6f", audioCachedCost)), 캐시된 텍스트=$\(String(format: "%.6f", textCachedCost))")
                                 print("         오디오 출력=$\(String(format: "%.6f", audioOutputCost)), 텍스트 출력=$\(String(format: "%.6f", textOutputCost))")
                                 print("         음성 기록=$\(String(format: "%.6f", audioCost))")
-                                print("총 비용: $\(String(format: "%.6f", totalCost))")
+                                print("총 비용: $\(String(format: "%.6f", totalCost)) (차감될 포인트: \(pointsToDeduct))")
                                 print("누적 비용: $\(String(format: "%.6f", currentSessionCost))")
                                 
                                 // AI 응답 기록
@@ -721,6 +942,7 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                     "role": "assistant",
                                     "content": transcript,
                                     "cost": totalCost,
+                                    "pointsDeducted": pointsToDeduct, // 차감된 포인트도 기록
                                     "costDetails": [
                                         "audioInputCost": audioInputCost,
                                         "textInputCost": textInputCost,
@@ -734,8 +956,15 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                 ]
                                 conversations.append(aiResponse)
                                 
-                                // Supabase에 저장
+                                // Supabase에 저장 (AI 응답)
                                 saveConversationToSupabase(transcript: "AI: \(transcript)")
+
+                                // 포인트 차감 로직 호출 (비동기적으로 실행)
+                                if pointsToDeduct > 0 {
+                                    Task {
+                                        await updateUserPoints(pointsToDeduct: pointsToDeduct)
+                                    }
+                                }
                             }
                         }
 

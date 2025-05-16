@@ -104,11 +104,17 @@ struct MainView: View {
                         // 통화 버튼
                         Button(action: { 
                             callManager.callError = nil // 오류 상태 초기화
-                            callManager.requestCallPush()
-                            // 오류 없을 때만 성공 알림 표시
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                if callManager.callError == nil {
-                                    showCallRequestAlert = true
+                            Task {
+                                if await RealtimeAIConnection.shared.checkSufficientPoints() {
+                                    callManager.requestCallPush()
+                                    // 오류 없을 때만 성공 알림 표시
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                        if callManager.callError == nil {
+                                            showCallRequestAlert = true
+                                        } else {
+                                            showCallErrorAlert = true
+                                        }
+                                    }
                                 } else {
                                     showCallErrorAlert = true
                                 }

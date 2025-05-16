@@ -20,19 +20,23 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 40) {
                     // 멤버십 정보
-                    HStack {
-                        Text("나의 멤버십")
-                            .font(.system(size: 16))
-                        
-                        Spacer()
-                        
-                        Text("무료")
-                            .font(.system(size: 16, weight: .bold))
+                    NavigationLink(destination: PayView()) {
+                        HStack {
+                            Text("나의 멤버십")
+                                .font(.system(size: 16))
+                                .foregroundColor(AppTheme.Colors.text)
+                            
+                            Spacer()
+                            
+                            Text("무료")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(AppTheme.Colors.text)
+                        }
+                        .padding(.horizontal, 20)
+                        .frame(height: 78)
+                        .background(AppTheme.Colors.secondaryLight)
+                        .cornerRadius(16)
                     }
-                    .padding(.horizontal, 20)
-                    .frame(height: 78)
-                    .background(AppTheme.Colors.secondaryLight)
-                    .cornerRadius(16)
                     
                     // 설정 섹션
                     VStack(spacing: 16) {
@@ -72,7 +76,6 @@ struct SettingsView: View {
                         
                         // 기타 메뉴 아이템
                         VStack(spacing: 24) {
-                            SettingsItemView(title: "오픈소스 라이브러리", destination: AnyView(OpenSourceView()))
                             SettingsItemView(title: "문의하기", destination: AnyView(InquiryView()))
                             SettingsItemView(title: "이용약관", destination: AnyView(TermsOfServiceView()))
                             SettingsItemView(title: "개인정보처리방침", destination: AnyView(PrivacyPolicyView()))
