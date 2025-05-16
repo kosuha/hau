@@ -77,8 +77,26 @@ struct SettingsView: View {
                         // 기타 메뉴 아이템
                         VStack(spacing: 24) {
                             SettingsItemView(title: "문의하기", destination: AnyView(InquiryView()))
-                            SettingsItemView(title: "이용약관", destination: AnyView(TermsOfServiceView()))
-                            SettingsItemView(title: "개인정보처리방침", destination: AnyView(PrivacyPolicyView()))
+                            Link(destination: URL(string: "https://seonhoki.notion.site/HAYT-1f58d444fd4880c488a1eb8ae7021b0d")!) {
+                                HStack {
+                                    Text("이용약관")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(AppTheme.Colors.text)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(AppTheme.Colors.text)
+                                }
+                            }
+                            Link(destination: URL(string: "https://seonhoki.notion.site/HAYT-1f58d444fd4880bdba79dbabcf97a8d2")!) {
+                                HStack {
+                                    Text("개인정보처리방침")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(AppTheme.Colors.text)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(AppTheme.Colors.text)
+                                }
+                            }
                         }
                     }
                 }

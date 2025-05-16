@@ -16,7 +16,7 @@ struct PayView: View {
                     Text("무료 플랜")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(AppTheme.Colors.text)
-                    Text("매월 약 1300원 상당의 무료 통화시간 제공")
+                    Text("매월 약 1,300원 상당의 무료 통화시간 제공")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(AppTheme.Colors.text)
                     Text("(매월 1일 초기화)")
