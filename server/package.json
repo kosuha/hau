@@ -11,6 +11,7 @@
   "description": "",
   "dependencies": {
     "@fastify/websocket": "^11.0.2",
+    "@supabase/supabase-js": "^2.49.4",
     "apn": "^2.2.0",
     "axios": "^1.8.4",
     "dotenv": "^16.4.7",
