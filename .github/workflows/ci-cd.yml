@@ -72,7 +72,8 @@ jobs:
             docker stop my-node-container || true
             docker rm my-node-container || true
             echo "Starting new container..."
-            echo -e '${{ secrets.APN_KEY_CONTENT }}' > /tmp/apn_key.p8 && \
+            echo '${{ secrets.APN_KEY_CONTENT }}' > /tmp/apn_key.p8
+            chmod 600 /tmp/apn_key.p8
             docker run -d \
               -p 3000:3000 \
               -v /tmp/apn_key.p8:/app/AuthKey.p8 \

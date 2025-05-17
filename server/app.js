@@ -232,6 +232,13 @@ async function sendVoipPushNotification(fastifyInstance, receiverVoipToken, payl
   notification.pushType = 'voip'; // VoIP 푸시 타입
   notification.expiry = Math.floor(Date.now() / 1000) + 3600; // 1시간 후 만료
   notification.payload = payload; // { aps: { ... }, ...customData }
+  
+  console.log("APN 토픽:", notification.topic);
+  console.log("APN 알림 설정:", JSON.stringify({
+    priority: notification.priority,
+    pushType: notification.pushType,
+    payload: notification.payload
+  }, null, 2));
 
   try {
     fastifyInstance.log.info(`[VoIP Push Send] 전송 시도: ${notificationKeyForLog} (토큰: ${receiverVoipToken.substring(0,10)}...)`);
@@ -244,7 +251,8 @@ async function sendVoipPushNotification(fastifyInstance, receiverVoipToken, payl
     
     if (result.failed.length > 0) {
       fastifyInstance.log.error(`[VoIP Push Send] 실패: ${notificationKeyForLog}`, 
-        JSON.stringify(result.failed[0].response || result.failed[0].error));
+        JSON.stringify(result.failed[0]));
+      console.error("APN 전송 실패 상세:", JSON.stringify(result.failed, null, 2));
       return { success: false, error: result.failed[0].response || result.failed[0].error };
     }
     // 드물게 sent도 failed도 없는 경우가 있을 수 있음
