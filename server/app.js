@@ -19,6 +19,8 @@ let apnProvider;
 // Supabase 클라이언트 초기화
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY; // service_role key 권장
+console.log("supabaseUrl", supabaseUrl);
+console.log("supabaseKey", supabaseKey);
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // key: userId_originalDay_originalTime (e.g., user123_수_17:05), value: YYYY-MM-DD of last send
