@@ -189,7 +189,6 @@ struct InquiryView: View {
                     inquiryText = ""
                     emailText = ""
                 }
-                print("Supabase에 문의 저장 성공: \(inquiryData)")
 
             } catch {
                 await MainActor.run {

@@ -499,6 +499,87 @@ setInterval(async () => {
 
 }, 60000); // 60초(1분)마다 실행
 
+// 회원 탈퇴 처리 엔드포인트
+fastify.delete('/api/v1/user/delete', async (request, reply) => {
+  // 인증 헤더에서 토큰 추출
+  const authHeader = request.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return reply.code(401).send({ error: '인증 토큰이 필요합니다.' });
+  }
+  
+  const token = authHeader.split(' ')[1];
+  
+  try {
+    // JWT 토큰으로 사용자 정보 확인
+    const { data: userData, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !userData || !userData.user) {
+      fastify.log.error(`토큰 검증 오류: ${userError?.message || '사용자 정보 없음'}`);
+      return reply.code(401).send({ error: '유효하지 않은 토큰입니다.' });
+    }
+    
+    const userId = userData.user.id;
+    // fastify.log.info(`회원 탈퇴 요청: userId=${userId}`);
+
+    // Supabase Auth API로 사용자 삭제
+    // 관리자 권한으로 사용자 삭제 (service_role key 필요)
+    const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
+    
+    if (deleteError) {
+      fastify.log.error(`회원 탈퇴 오류: ${deleteError.message}`);
+      return reply.code(500).send({ 
+        error: '회원 탈퇴 처리 중 오류가 발생했습니다.', 
+        message: deleteError.message 
+      });
+    }
+    
+    // 1. history 테이블에서 사용자 데이터 삭제
+    const { error: historyError } = await supabase
+      .from('history')
+      .delete()
+      .eq('auth_id', userId);
+      
+    if (historyError) {
+      fastify.log.warn(`history 테이블 데이터 삭제 오류: ${historyError.message}`);
+      // 이 오류는 진행을 중단하지 않음
+    }
+    
+    // 2. user_monthly_points 테이블에서 사용자 데이터 삭제
+    const { error: pointsError } = await supabase
+      .from('user_monthly_points')
+      .delete()
+      .eq('user_id', userId);
+      
+    if (pointsError) {
+      fastify.log.warn(`user_monthly_points 테이블 데이터 삭제 오류: ${pointsError.message}`);
+      // 이 오류는 진행을 중단하지 않음
+    }
+    
+    // 3. users 테이블에서 사용자 데이터 삭제
+    const { error: usersError } = await supabase
+      .from('users')
+      .delete()
+      .eq('auth_id', userId);
+      
+    if (usersError) {
+      fastify.log.warn(`users 테이블 데이터 삭제 오류: ${usersError.message}`);
+      // 이 오류는 진행을 중단하지 않음
+    }
+    
+    return reply.code(200).send({ 
+      success: true, 
+      message: '회원 탈퇴가 성공적으로 처리되었습니다.' 
+    });
+    
+  } catch (error) {
+    fastify.log.error(`회원 탈퇴 처리 중 오류 발생: ${error.message}`);
+    return reply.code(500).send({ 
+      error: '회원 탈퇴 처리 중 오류가 발생했습니다.', 
+      message: error.message 
+    });
+  }
+});
+
 // 서버 시작 (포트 3000)
 fastify.listen({ port: 3000, host: '0.0.0.0' }, (err, address) => {
   if (err) {

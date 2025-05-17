@@ -21,7 +21,6 @@ struct CallView: View {
     // 통화 준비 상태 추적
     @State private var callState: CallState = .preparing {
         didSet {
-            print("CallView: callState changed from \(oldValue) to \(callState)")
             // *** 수정: callState 변경에 따른 타이머 로직 호출 ***
             if callState == .connected {
                 startCallTimer()
@@ -85,7 +84,6 @@ struct CallView: View {
                         Button(action: {
                             // *** 수정: 버튼 비활성화 상태 설정 ***
                             isEndingCall = true
-                            print("CallView: End call button tapped. Disabling button.")
                             callState = .disconnected
                             callManager.endCall()
                         }) {
@@ -107,9 +105,7 @@ struct CallView: View {
             }
             .navigationBarHidden(true)
             .onAppear {
-                print("CallView: onAppear triggered.")
                 if callManager.shouldShowCallScreen {
-                    print("CallView: Setting callState = .preparing in onAppear")
                     resetCallTimer()
                     callState = .preparing
                     Task {
@@ -117,13 +113,11 @@ struct CallView: View {
                     }
                 } else {
                     // 통화가 종료되면 AI 연결도 종료 (이 경우는 거의 없을 것으로 예상)
-                    print("CallView: onAppear detected shouldShowCallScreen is false. Disconnecting AI and dismissing.")
                     disconnectAI()
                     dismiss()
                 }
             }
             .onDisappear {
-                print("CallView: onDisappear triggered.")
                 disconnectAI()
             }
         }
@@ -131,7 +125,6 @@ struct CallView: View {
     
     // MARK: - Timer Functions (추가)
     private func startCallTimer() {
-        print("CallView: Starting call timer.")
         // 기존 타이머가 있다면 중지
         stopCallTimer()
         // 매초마다 callDurationSeconds를 업데이트하고 포맷팅
@@ -142,13 +135,11 @@ struct CallView: View {
     }
     
     private func stopCallTimer() {
-        print("CallView: Stopping call timer.")
         callTimer?.invalidate()
         callTimer = nil
     }
     
     private func resetCallTimer() {
-        print("CallView: Resetting call timer variables.")
         stopCallTimer()
         callDurationSeconds = 0
         callDurationFormatted = "00:00"
@@ -191,12 +182,10 @@ struct CallView: View {
         // Supabase에서 통화 기록 가져오기
         do {
             guard let session = try? await client.auth.session else {
-                print("세션 정보를 가져올 수 없습니다.")
                 return nil
             }
             
             let userId = session.user.id.uuidString
-            print("통화 기록 조회: 사용자 ID=\(userId)")
             
             // history 테이블에서 해당 사용자의 최근 3개 통화 기록 조회
             let response = try await client
@@ -207,16 +196,10 @@ struct CallView: View {
                 .limit(3)
                 .execute()
             
-            if let jsonString = String(data: response.data, encoding: .utf8) {
-                print("통화 기록 응답: \(jsonString)")
-            }
-            
             // 응답 JSON을 파싱해서 history 배열 생성
             if let jsonArray = try? JSONSerialization.jsonObject(with: response.data, options: []) as? [[String: Any]] {
-                print("통화 기록 설정 완료: \(jsonArray.count)개 기록")
                 callSettings["history"] = jsonArray
             } else {
-                print("통화 기록 파싱 실패")
                 callSettings["history"] = []
             }
         } catch {
@@ -224,7 +207,7 @@ struct CallView: View {
         }
         
         // POST 요청 준비
-        let url = URL(string: "http://3.34.190.29:3000/api/v1/realtime/sessions")!
+        let url = URL(string: "\(AppConfig.baseURL)/realtime/sessions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -238,7 +221,6 @@ struct CallView: View {
             
             if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 resultData = jsonObject
-                print("서버 응답: \(String(describing: resultData))")
             }
         } catch {
             print("토큰 요청 오류: \(error.localizedDescription)")
@@ -248,36 +230,27 @@ struct CallView: View {
     }
 
     private func connectAI() async {
-        print("CallView: connectAI started. Setting callState = .preparing")
         resetCallTimer()
         callState = .preparing
         
         // 콜백 제거 먼저 수행 (유지)
-        print("CallView: connectAI - Clearing previous onStateChange callback.")
         RealtimeAIConnection.shared.onStateChange = nil
         
         // 기존 연결 종료 (유지)
-        print("CallView: connectAI - Disconnecting existing connection.")
         RealtimeAIConnection.shared.disconnect()
         
         // *** 수정: onStateChange 콜백 설정 위치 변경 및 로직 강화 ***
-        print("CallView: connectAI - Setting new onStateChange callback.")
         RealtimeAIConnection.shared.onStateChange = { isConnected in
-            print("CallView: onStateChange callback triggered. isConnected: \(isConnected), current callState: \(self.callState)")
             DispatchQueue.main.async {
                 if isConnected {
                     // 연결 성공 콜백: preparing 상태일 때만 connected로 변경
                     if self.callState == .preparing {
-                        print("CallView: Setting callState = .connected in onStateChange(true) because current state was preparing.")
                         self.callState = .connected
                     }
                 } else {
                     // 연결 실패/끊김 콜백: connected 상태일 때만 disconnected로 변경
                     if self.callState == .connected {
-                        print("CallView: Setting callState = .disconnected in onStateChange(false) because current state was connected.")
                         self.callState = .disconnected
-                    } else {
-                        print("CallView: Ignoring onStateChange(false) because current state is \(self.callState)")
                     }
                 }
             }
@@ -295,26 +268,21 @@ struct CallView: View {
                let tokenValue = clientSecret["value"] as? String {
                 
                 // RealtimeAIConnection.startCall() 호출하고 결과 확인
-                print("CallView: RealtimeAIConnection.startCall 호출 시작")
                 let canStartCall = await RealtimeAIConnection.shared.startCall()
-                print("CallView: RealtimeAIConnection.startCall 호출 완료. 결과: \(canStartCall)")
                 
                 if canStartCall {
                     // startCall이 true를 반환한 경우 (포인트 충분 등)에만 initialize 호출
-                    print("CallView: RealtimeAIConnection.initialize 호출 시작")
                     let initSuccess = await RealtimeAIConnection.shared.initialize(with: tokenValue)
                     
                     if initSuccess {
                         DispatchQueue.main.async {
                             if self.callState == .preparing { 
-                                print("CallView: Setting callState = .connected directly after successful initialization.")
                                 self.callState = .connected
                             }
                         }
                     } else {
                         // initialize 실패
                         DispatchQueue.main.async {
-                            print("CallView: AI initialization failed. Setting callState = .disconnected and triggering dismiss.")
                             self.callState = .disconnected
                             self.callManager.shouldShowCallScreen = false // 화면 닫기
                             // 사용자에게 알림 (예: "AI 서버 연결에 실패했습니다.")
@@ -323,7 +291,6 @@ struct CallView: View {
                 } else {
                     // startCall이 false를 반환한 경우 (포인트 부족 등)
                     DispatchQueue.main.async {
-                        print("CallView: 포인트 부족 또는 사전 확인 실패로 통화 시작 안 함. Setting callState = .disconnected and triggering dismiss.")
                         self.callState = .disconnected
                         self.callManager.shouldShowCallScreen = false // 화면 닫기
                         // 사용자에게 알림 (예: "포인트가 부족하여 통화를 시작할 수 없습니다.")
@@ -335,7 +302,6 @@ struct CallView: View {
                 
             } else {
                 // 토큰 가져오기 실패 처리
-                print("CallView: Failed to get ephemeralKey(tokenValue). Setting callState = .disconnected and triggering dismiss.")
                 DispatchQueue.main.async {
                     self.callState = .disconnected
                     self.callManager.shouldShowCallScreen = false
@@ -345,7 +311,6 @@ struct CallView: View {
     }
 
     private func disconnectAI() {
-        print("CallView: disconnectAI called. Setting callState = .disconnected")
         // openai webrtc 연결 해제
         RealtimeAIConnection.shared.disconnect()
         callState = .disconnected

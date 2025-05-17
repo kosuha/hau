@@ -57,8 +57,6 @@ struct HAUApp: App {
             .onAppear {
                 // onAppear가 여러 번 호출될 경우를 대비해 한 번만 실행되도록 함
                 guard !initialSetupStarted else { return }
-
-                print("HAUApp: onAppear 실행됨 - 초기 설정 시작.")
                 
                 // 앱 버전 체크
                 Task {
@@ -107,13 +105,10 @@ struct HAUApp: App {
     func checkAppVersion() async {
         // 현재 앱 버전 가져오기
         guard let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String else {
-            print("HAUApp: 현재 앱 버전을 가져올 수 없습니다.")
             return
         }
         
         do {
-            print("HAUApp: 버전 체크 시작")
-            print("HAUApp: 현재 버전: \(currentVersion)")
             // Supabase에서 버전 정보 가져오기 (예시: app_config 테이블에서 최신 버전 정보 조회)
             let queriedItems: [AppVersionResponse] = try await client
                 .database
@@ -146,10 +141,6 @@ struct HAUApp: App {
                     )
                     showUpdateAlert = true
                 }
-                
-                print("HAUApp: 강제 업데이트가 필요합니다. (현재: \(currentVersion), 최소 요구 버전: \(response.minimumVersion))")
-            } else {
-                print("HAUApp: 강제 업데이트가 필요하지 않습니다. (현재: \(currentVersion), 최소 요구 버전: \(response.minimumVersion))")
             }
         } catch {
             print("HAUApp: 버전 정보를 가져오는 중 오류 발생: \(error.localizedDescription)")

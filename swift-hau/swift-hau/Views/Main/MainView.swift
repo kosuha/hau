@@ -182,7 +182,6 @@ struct MainView: View {
             }
             .onChange(of: callManager.shouldShowCallScreen) { newValue in
                 if !newValue {
-                    print("MainView: onChange detected shouldShowCallScreen is false. Setting showCallViewAsSheet = false.")
                     showCallViewAsSheet = false
                 }
                 // newValue가 true일 때는 setupCallScreenObserver에서 처리하므로 별도 로직 필요 없음

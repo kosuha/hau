@@ -26,7 +26,7 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     private var uuid: UUID?
     
     // 서버 API 엔드포인트
-    private let serverURL = "http://3.34.190.29:3000/api/v1"
+    private let serverURL = AppConfig.baseURL
     
     override init() {
         // CallKit 제공자 설정
@@ -41,8 +41,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
         super.init()
         
         provider.setDelegate(self, queue: nil)
-        
-        print("CallManager: 초기화됨")
     }
     
     // VoIP 푸시 알림 설정
@@ -61,7 +59,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     func reportIncomingCall(uuid: UUID, handle: String, hasVideo: Bool = false, completion: ((Bool) -> Void)? = nil) {
         // 이미 통화 중이거나 알림이 진행 중이면 새 통화 거부
         if isCallInProgress {
-            print("이미 통화 중이거나, 통화 알림이 진행 중입니다. 새 통화 요청 무시")
             completion?(false)
             return
         }
@@ -85,8 +82,7 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
                 completion?(false)
                 return
             }
-            
-            print("수신 전화 표시 성공")
+
             self.isCallActive = true
             self.callError = nil
             completion?(true)
@@ -100,8 +96,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
         
         // CallKit에 종료 요청
         callController.request(transaction) { error in
-            print("CallManager: endCall transaction completion. Error: \(error?.localizedDescription ?? "nil")")
-            
             if let error = error {
                 print("CallManager: 통화 종료 요청 오류: \(error.localizedDescription)")
                 // 오류 발생 시에도 상태는 초기화 (메인 스레드에서)
@@ -111,12 +105,9 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
                     self.isCallInProgress = false
                 }
             } else {
-                print("CallManager: 통화 종료 요청 성공")
-                
                 // *** 수정: shouldShowCallScreen 업데이트에 딜레이 추가 ***
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { // 0.5초 딜레이
                     self.shouldShowCallScreen = false // 화면 전환 트리거
-                    print("CallManager: Setting shouldShowCallScreen = false on main thread after delay")
                 }
                 
                 // 나머지 상태 업데이트 및 AI 연결 종료는 딜레이 없이 즉시 수행
@@ -124,7 +115,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
                 self.isCallInProgress = false
                 
                 if RealtimeAIConnection.shared.isConnected {
-                    print("CallManager: Disconnecting AI connection...")
                     RealtimeAIConnection.shared.disconnect()
                 }
             }
@@ -174,8 +164,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
             return
         }
         
-        print("통화 요청 시작: \(url.absoluteString)")
-        
         // 서버 요청 전송
         let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             guard let self = self else { return }
@@ -194,17 +182,13 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
                     return
                 }
                 
-                print("서버 응답 상태 코드: \(httpResponse.statusCode)")
-                
                 if httpResponse.statusCode == 200 {
-                    print("통화 푸시 요청이 성공적으로 전송되었습니다.")
                     self.callError = nil
                     
                     // 테스트를 위해 로컬에서 수신 전화 시뮬레이션
                     // 실제로는 서버에서 푸시 알림을 보내고, 그 알림을 받아서 처리함
                     if let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                        let success = json["success"] as? Bool, success == true {
-                        print("서버 응답: \(json)")
                     }
                 } else {
                     print("서버 오류: 상태 코드 \(httpResponse.statusCode)")
@@ -240,12 +224,10 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     // 사용자 ID 설정 메서드 (로그인 성공 후 호출)
     func setUserId(_ userId: String) {
-        print("CallManager: 사용자 ID 설정됨 - \(userId)")
         currentUserId = userId
         
         // 이전에 저장된 토큰이 있으면 사용자 ID와 함께 다시 전송
         if hasPendingToken, let token = pendingToken {
-            print("CallManager: 보류 중인 토큰을 현재 사용자 ID로 전송합니다.")
             sendTokenToServer(token)
             hasPendingToken = false
             pendingToken = nil
@@ -254,7 +236,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     // 사용자 ID 초기화 (로그아웃 시 호출)
     func clearUserId() {
-        print("CallManager: 사용자 ID 초기화됨")
         currentUserId = nil
         hasPendingToken = false
         pendingToken = nil
@@ -264,7 +245,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     func sendTokenToServer(_ token: String) {
         // 사용자 ID가 없으면 토큰을 임시 저장하고 종료
         guard let userId = currentUserId else {
-            print("CallManager: 사용자 ID가 없어 토큰을 임시 저장합니다.")
             hasPendingToken = true
             pendingToken = token
             return
@@ -290,8 +270,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
             return
         }
         
-        print("CallManager: 사용자 ID \(userId)로 VoIP 토큰 등록 요청")
-        
         // 서버 요청 전송
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
@@ -304,11 +282,11 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
                 return
             }
             
-            if httpResponse.statusCode == 200 {
-                print("VoIP 푸시 토큰이 성공적으로 등록되었습니다.")
-            } else {
-                print("서버 오류: 상태 코드 \(httpResponse.statusCode)")
-            }
+            // if httpResponse.statusCode == 200 {
+            //     print("VoIP 푸시 토큰이 성공적으로 등록되었습니다.")
+            // } else {
+            //     print("서버 오류: 상태 코드 \(httpResponse.statusCode)")
+            // }
         }
         
         task.resume()
@@ -323,7 +301,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
         shouldShowCallScreen = false
         isCallInProgress = false
         // RealtimeAIConnection.shared.disconnect() 제거
-        print("CallManager: Provider 리셋됨, 상태 초기화")
     }
     
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
@@ -343,17 +320,14 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         // 사용자가 전화를 종료했을 때 (또는 시스템에 의해 종료될 때)
         // *** 로그 추가 ***
-        print("CallManager: provider(_:perform: CXEndCallAction) called for UUID: \(action.callUUID)")
         action.fulfill()
     }
     
     // 통화가 활성화될 때 (오디오 세션 관련)
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         // 오디오 세션이 활성화되었을 때
-        print("CallManager: CXProvider가 오디오 세션 활성화를 요청함")
         do {
             try AVAudioSession.sharedInstance().setActive(true)
-            print("CallManager: AVAudioSession 활성화 성공")
         } catch {
             print("CallManager: AVAudioSession 활성화 오류: \(error.localizedDescription)")
         }
@@ -361,10 +335,8 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
         // 오디오 세션이 비활성화되었을 때
-        print("CallManager: CXProvider가 오디오 세션 비활성화를 요청함")
         do {
             try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-            print("CallManager: AVAudioSession 비활성화 성공")
         } catch {
             print("CallManager: AVAudioSession 비활성화 오류: \(error.localizedDescription)")
         }
@@ -374,7 +346,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     // 사용자가 통화를 거부했을 때 (통화 UI에서 "거부" 버튼을 누른 경우)
     // CXRejectCallAction은 존재하지 않으므로 대신 didRejectIncomingCall을 사용
     func provider(_ provider: CXProvider, didReject callUUID: UUID) {
-        print("통화 거부됨")
         isCallActive = false
         shouldShowCallScreen = false
         isCallInProgress = false  // 상태 초기화
@@ -417,7 +388,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
         
         // NotificationCenter를 통해 앱 내에서 통화 화면 전환 알림
         NotificationCenter.default.post(name: NSNotification.Name("ShowCallScreen"), object: nil)
-        print("통화 화면으로 이동 요청됨")
     }
     
     // MARK: - PKPushRegistryDelegate
@@ -426,7 +396,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
         // VoIP 푸시 토큰을 서버에 등록
         if type == .voIP {
             let token = pushCredentials.token.map { String(format: "%02.2hhx", $0) }.joined()
-            print("VoIP 푸시 토큰: \(token)")
             // 여기서 토큰을 서버에 전송
             sendTokenToServer(token)
         }
@@ -445,11 +414,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
             
             // 수신 전화 표시
             reportIncomingCall(uuid: uuid, handle: handle) { success in
-                if success {
-                    print("수신 전화 표시 성공")
-                } else {
-                    print("수신 전화 표시 실패")
-                }
                 completion()
             }
         }

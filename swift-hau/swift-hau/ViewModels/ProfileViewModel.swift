@@ -49,8 +49,6 @@ class ProfileViewModel: ObservableObject {
         originalName = name
         originalBirthdate = birthdate
         originalSelfStory = selfStory
-        
-        print("프로필이 저장되었습니다.")
     }
     
     func logout(authViewModel: AuthViewModel) {
@@ -61,8 +59,6 @@ class ProfileViewModel: ObservableObject {
         
         // AuthViewModel을 통해 로그아웃 수행
         authViewModel.signOut()
-        
-        print("로그아웃되었습니다.")
     }
     
     func deleteAccount(authViewModel: AuthViewModel) {
@@ -94,7 +90,6 @@ class ProfileViewModel: ObservableObject {
                         // 로그아웃 처리
                         authViewModel.signOut()
                     }
-                    print("회원탈퇴가 성공적으로 처리되었습니다.")
                 } else {
                     // 서버 오류 처리
                     let errorMessage = try? JSONDecoder().decode([String: String].self, from: data)["message"] ?? "알 수 없는 오류"
@@ -108,7 +103,5 @@ class ProfileViewModel: ObservableObject {
                 }
             }
         }
-        
-        print("회원탈퇴 요청이 전송되었습니다.")
     }
 }

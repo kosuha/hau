@@ -80,7 +80,6 @@ class RealtimeAIConnection: NSObject {
         // 앱 시작 시 한 번만 SSL 초기화
         RTCInitializeSSL()
         factory = RTCPeerConnectionFactory()
-        print("RealtimeAIConnection: WebRTC 초기화 완료")
     }
     
     deinit {
@@ -94,8 +93,6 @@ class RealtimeAIConnection: NSObject {
         
         // 이전 연결 완전히 정리
         cleanupConnection()
-        
-        print("AI 연결 초기화 시작...")
         
         // 상태 업데이트
         isConnected = false
@@ -124,9 +121,7 @@ class RealtimeAIConnection: NSObject {
                     DispatchQueue.main.async {
                         self.onStateChange?(true)
                     }
-                    print("AI 연결 성공!")
                 } else {
-                    print("AI 연결 실패")
                     // 실패 시 연결 정리
                     self.cleanupConnection()
                 }
@@ -149,37 +144,31 @@ class RealtimeAIConnection: NSObject {
     }
     
     private func setupLocalAudioTrack() {
-        print("setupLocalAudioTrack: 시작")
         let audioConstrains = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
         guard let audioSource = factory?.audioSource(with: audioConstrains) else {
             print("setupLocalAudioTrack: ERROR - 오디오 소스 생성 실패")
             return
         }
-        print("setupLocalAudioTrack: 오디오 소스 생성됨")
 
         audioTrack = factory?.audioTrack(with: audioSource, trackId: "audio0")
         guard let currentAudioTrack = audioTrack else {
             print("setupLocalAudioTrack: ERROR - 오디오 트랙 생성 실패")
             return
         }
-        print("setupLocalAudioTrack: 오디오 트랙 생성됨 (ID: \(currentAudioTrack.trackId), Enabled: \(currentAudioTrack.isEnabled))") // 상태 확인
 
         let streamId = "stream0"
         guard let localStream = factory?.mediaStream(withStreamId: streamId) else {
              print("setupLocalAudioTrack: ERROR - 로컬 미디어 스트림 생성 실패")
              return
         }
-        print("setupLocalAudioTrack: 로컬 미디어 스트림 생성됨 (ID: \(streamId))")
 
         localStream.addAudioTrack(currentAudioTrack)
-        print("setupLocalAudioTrack: 오디오 트랙 로컬 스트림에 추가됨")
 
         guard let pc = peerConnection else {
              print("setupLocalAudioTrack: ERROR - PeerConnection이 nil 상태")
              return
         }
         pc.add(currentAudioTrack, streamIds: [streamId])
-        print("setupLocalAudioTrack: 오디오 트랙 PeerConnection에 추가됨")
     }
     
     private func setupDataChannel() {
@@ -244,7 +233,6 @@ class RealtimeAIConnection: NSObject {
                         print("원격 SDP 설정 에러: \(error.localizedDescription)")
                         completion(false)
                     } else {
-                        print("WebRTC 연결 완료!")
                         completion(true)
                     }
                 }
@@ -256,7 +244,6 @@ class RealtimeAIConnection: NSObject {
     
     // 연결만 정리 (SSL은 초기화하지 않음)
     private func cleanupConnection() {
-        print("WebRTC 연결 정리 중...")
         
         if let dataChannel = self.dataChannel {
             dataChannel.close()
@@ -284,8 +271,6 @@ class RealtimeAIConnection: NSObject {
         DispatchQueue.main.async {
             self.onStateChange?(false)
         }
-        
-        print("WebRTC 연결 정리 완료")
     }
     
     func disconnect() {
@@ -318,12 +303,6 @@ class RealtimeAIConnection: NSObject {
                     print("서버 전송 에러: \(error.localizedDescription)")
                     return
                 }
-                
-                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                    print("대화 내용 서버 전송 성공")
-                    // 성공 시 대화 내용 초기화 (선택적)
-                    // self.conversations = []
-                }
             }.resume()
         } catch {
             print("대화 내용 JSON 변환 에러: \(error.localizedDescription)")
@@ -333,7 +312,6 @@ class RealtimeAIConnection: NSObject {
     private func stopConversationIfLimitReached(currentCost: Double) {
         // 1) 이미 한 번 트리거했다면 중복 방지
         guard currentCost >= costLimit, !pendingEndCall else { return }
-        print("비용 제한(\(costLimit)달러)에 도달")
     }
     
     // 콜 매니저 설정 메소드 추가
@@ -344,13 +322,11 @@ class RealtimeAIConnection: NSObject {
     // 통화 시작 시 호출되는 메서드
     // 반환 타입을 Bool로 변경하여 포인트 부족 시 실패를 알림
     func startCall() async -> Bool {
-        print("startCall")
         
         // currentAuthId를 startCall 시작 시점에 session으로부터 가져오도록 수정
         do {
             let session = try await client.auth.session
             self.currentAuthId = session.user.id.uuidString
-            print("사용자 인증 ID 설정: \(self.currentAuthId ?? "없음")")
         } catch {
             print("startCall 오류: 사용자 세션 정보를 가져오는데 실패했습니다 - \(error.localizedDescription)")
             return false // 세션 정보 없으면 시작 불가
@@ -364,7 +340,6 @@ class RealtimeAIConnection: NSObject {
 
         // 1. 사용자 포인트 확인
         do {
-            print("사용자 포인트 확인 중... 사용자 ID: \(currentAuthUserId)")
             let response = try await client // PostgrestResponse를 받도록 변경
                 .from("user_monthly_points")
                 .select("points")
@@ -384,17 +359,14 @@ class RealtimeAIConnection: NSObject {
             }
 
             if pointsResponse == nil {
-                print("startCall 실패: 사용자 ID \(currentAuthUserId)에 대한 포인트 레코드가 없어 통화를 시작할 수 없습니다.")
                 return false // 데이터(포인트 레코드)가 없어서 통화 시작 실패
             }
 
             // 레코드가 있으면 실제 포인트 값 확인
             // pointsResponse가 nil이 아니므로 강제 언래핑 사용 가능 (위에서 nil 체크됨)
             let currentPoints = pointsResponse!.points 
-            print("현재 사용자 포인트: \(currentPoints)")
 
             if currentPoints <= 0 {
-                print("포인트 부족(\(currentPoints) 포인트)으로 통화를 시작할 수 없습니다.")
                 return false // 포인트 부족 시 false 반환
             }
         } catch {
@@ -405,7 +377,6 @@ class RealtimeAIConnection: NSObject {
         }
 
         // 포인트가 충분하면 통화 기록 생성 및 나머지 로직 진행
-        print("포인트 충분. 통화 기록 생성 시작...")
         conversations = [] // 대화 내용 초기화
         
         do {
@@ -416,7 +387,6 @@ class RealtimeAIConnection: NSObject {
                 auth_id: currentAuthUserId 
             )
 
-            print("insert 요청: \(newHistory)")
             let result = try await client
                 .from("history")
                 .insert(newHistory)
@@ -424,16 +394,11 @@ class RealtimeAIConnection: NSObject {
                 .single()
                 .execute()
 
-            print("Supabase 응답 전체: \(result)")
-            
             // JSON 데이터로 직접 파싱
             let data = result.data
             if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
                let id = json["id"] as? Int64 {
                 currentCallId = id
-                print("새로운 통화 기록 생성 완료: \(id)")
-            } else {
-                print("통화 기록 생성 실패: 응답 데이터 파싱 실패")
             }
         } catch {
             print("통화 기록 생성 오류: \(error)")
@@ -446,17 +411,13 @@ class RealtimeAIConnection: NSObject {
     // Supabase에서 사용자 포인트 업데이트 및 부족 시 통화 종료 처리
     private func updateUserPoints(pointsToDeduct: Int) async {
         guard let authId = self.currentAuthId else {
-            print("포인트 차감 오류: 사용자 인증 ID를 찾을 수 없습니다.")
             CallManager.shared.callError = "사용자 정보를 확인할 수 없어 포인트 차감에 실패했습니다."
             return
         }
 
         guard pointsToDeduct > 0 else {
-            print("차감할 포인트가 없습니다.")
             return
         }
-
-        print("포인트 차감 시도: \(pointsToDeduct) 포인트, 사용자 ID: \(authId)")
 
         do {
             let response = try await client
@@ -471,7 +432,6 @@ class RealtimeAIConnection: NSObject {
                 let currentPointsResults = try JSONDecoder().decode([CurrentPointsResponse].self, from: response.data)
                 currentPointsResult = currentPointsResults.first
             } else {
-                print("포인트 업데이트 중 조회 결과 데이터가 비어있습니다. 사용자 ID: \(authId)")
                 CallManager.shared.callError = "포인트 정보를 업데이트하는 중 문제가 발생했습니다 (코드: UPU-ND)."
                 disconnect()
                 if let manager = self.callManager {
@@ -481,7 +441,6 @@ class RealtimeAIConnection: NSObject {
             }
 
             guard let unwrappedPointsResult = currentPointsResult else {
-                print("포인트 차감 오류: 사용자 ID \(authId)에 대한 포인트 레코드를 찾을 수 없습니다. 통화를 종료합니다.")
                 CallManager.shared.callError = "포인트 정보를 찾을 수 없어 통화가 중단되었습니다 (코드: UPU-NR)."
                 disconnect()
                 if let manager = self.callManager {
@@ -491,12 +450,10 @@ class RealtimeAIConnection: NSObject {
             }
 
             let currentPoints = unwrappedPointsResult.points
-            print("현재 포인트: \(currentPoints)")
 
             let newPoints = currentPoints - pointsToDeduct
 
             if newPoints < 0 {
-                print("포인트 부족! 현재 포인트: \(currentPoints), 필요 포인트: \(pointsToDeduct). 통화를 종료합니다.")
                 CallManager.shared.callError = "무료 사용량을 모두 소진하여 통화가 중단되었습니다. 무료 사용량은 매월 1일 초기화됩니다."
                 
                 try await client
@@ -517,7 +474,6 @@ class RealtimeAIConnection: NSObject {
                     .update(["points": newPoints])
                     .eq("user_id", value: authId)
                     .execute()
-                print("포인트 차감 완료. 새로운 포인트: \(newPoints)")
                 CallManager.shared.callError = nil // 성공적인 차감 후에는 기존 오류 메시지 클리어
             }
         } catch {
@@ -533,12 +489,10 @@ class RealtimeAIConnection: NSObject {
 
     // 통화 내용을 Supabase에 저장하는 메서드
     private func saveConversationToSupabase(transcript: String) {
-        print("통화 기록 저장 시작: \(currentCallId)")
         guard let callId = currentCallId else { return }
         
         Task {
             do {
-                print("통화 기록 업데이트 시작: \(callId)")
                 // history 테이블에서 해당 통화 ID의 레코드를 찾아 transcript 업데이트
                 let query = client
                     .from("history")
@@ -562,7 +516,6 @@ class RealtimeAIConnection: NSObject {
                         .eq("id", value: String(callId))
                         .execute()
                     
-                    print("통화 기록 업데이트 완료: \(callId)")
                 } else {
                     print("기존 transcript 가져오기 실패")
                 }
@@ -591,7 +544,6 @@ class RealtimeAIConnection: NSObject {
             return false
         }
 
-        print("checkSufficientPoints: 사용자 포인트 확인 중... 사용자 ID: \(currentAuthUserId)")
         do {
             let response = try await client
                 .from("user_monthly_points")
@@ -607,22 +559,18 @@ class RealtimeAIConnection: NSObject {
             }
 
             if pointsResponse == nil {
-                print("checkSufficientPoints: 사용자 ID \(currentAuthUserId)에 대한 포인트 레코드가 없습니다.")
                 // MainView에서 알림을 위해 CallManager를 통해 오류 메시지 설정 가능
                 // CallManager.shared.callError = "포인트 정보를 찾을 수 없습니다. 고객센터에 문의해주세요."
                 return false 
             }
 
             let currentPoints = pointsResponse!.points
-            print("checkSufficientPoints: 현재 사용자 포인트: \(currentPoints)")
 
             if currentPoints <= 0 {
-                print("checkSufficientPoints: 포인트 부족(\(currentPoints) 포인트).")
                 CallManager.shared.callError = "무료 사용량을 모두 소진하셨습니다. 무료 사용량은 매월 1일 초기화됩니다."
                 return false
             }
             
-            print("checkSufficientPoints: 포인트 충분함 (\(currentPoints) 포인트).")
             return true // 포인트 충분
 
         } catch {
@@ -636,22 +584,18 @@ class RealtimeAIConnection: NSObject {
 // MARK: - RTCPeerConnectionDelegate
 extension RealtimeAIConnection: RTCPeerConnectionDelegate {
     func peerConnectionDidStartCommunication(_ peerConnection: RTCPeerConnection) {
-        print("통신이 시작되었습니다")
         NotificationCenter.default.post(name: .aiAudioDebugUpdate, object: nil, userInfo: ["message": "AI: PeerConnection 통신 시작됨"])
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didStartReceivingOn transceiver: RTCRtpTransceiver) {
-        print("수신 시작됨: \(transceiver.mid ?? "unknown")")
         NotificationCenter.default.post(name: .aiAudioDebugUpdate, object: nil, userInfo: ["message": "AI: PeerConnection 수신 시작됨 (mid: \(transceiver.mid ?? "unknown"))"])
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
-        print("데이터 채널 열림: \(dataChannel.label)")
         NotificationCenter.default.post(name: .aiAudioDebugUpdate, object: nil, userInfo: ["message": "AI: 데이터 채널 열림 (label: \(dataChannel.label))"])
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCPeerConnectionState) {
-        print("PeerConnection 상태 변경: \(newState.rawValue)")
         var stateMessage = ""
         switch newState {
         case .new:
@@ -720,7 +664,6 @@ extension RealtimeAIConnection: RTCPeerConnectionDelegate {
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
-        print("ICE 연결 상태 변경: \(newState.rawValue)")
         var stateMessage = ""
         switch newState {
         case .new:
@@ -764,7 +707,6 @@ extension RealtimeAIConnection: RTCPeerConnectionDelegate {
 // MARK: - RTCDataChannelDelegate
 extension RealtimeAIConnection: RTCDataChannelDelegate {
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        print("데이터 채널 상태 변경: \(dataChannel.readyState.rawValue)")
         var stateMessage = ""
         switch dataChannel.readyState {
         case .connecting:
@@ -809,7 +751,6 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                 if let transcript = jsonData["transcript"] as? String {
                                     // 큰따옴표 제거하여 단순화
                                     debugMessage = "AI: 음성 텍스트 변환 완료 - \(transcript)"
-                                    print("음성 입력: \(transcript)\n")
                                     
                                     // 사용자 음성 입력 기록
                                     let userInput: [String: Any] = [
@@ -848,7 +789,6 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                             
                             // 디버그 메시지가 있으면 알림 발송
                             if let msg = debugMessage {
-                                print("AI Debug: \(msg)") // 콘솔에도 로그 출력
                                 NotificationCenter.default.post(name: .aiAudioDebugUpdate, object: nil, userInfo: ["message": msg])
                             }
                         }
@@ -868,7 +808,6 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                         if let type = jsonData["type"] as? String, type == "conversation.item.input_audio_transcription.completed" {
                             // print("jsonData: \(jsonData)")
                             if let transcript = jsonData["transcript"] as? String {
-                                print("음성 입력: \(transcript)\n")
                                 
                                 // 사용자 음성 입력 기록
                                 let userInput: [String: Any] = [
@@ -884,7 +823,6 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                         }
                         
                         if let type = jsonData["type"] as? String, type == "response.done" {
-                            // print(jsonData)
                             if let response = jsonData["response"] as? [String: Any],
                                let output = response["output"] as? [[String: Any]],
                                let messageContent = output.first?["content"] as? [[String: Any]],
@@ -929,13 +867,13 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                 let pointsToDeduct = Int(totalCost / 0.000001)
 
                                 debugMessage = "AI: 응답 완료 - \(transcript)"
-                                print("AI 응답: \(transcript)\n")
-                                print("비용 내역: 오디오 입력=$\(String(format: "%.6f", audioInputCost)), 텍스트 입력=$\(String(format: "%.6f", textInputCost))")
-                                print("         캐시된 오디오=$\(String(format: "%.6f", audioCachedCost)), 캐시된 텍스트=$\(String(format: "%.6f", textCachedCost))")
-                                print("         오디오 출력=$\(String(format: "%.6f", audioOutputCost)), 텍스트 출력=$\(String(format: "%.6f", textOutputCost))")
-                                print("         음성 기록=$\(String(format: "%.6f", audioCost))")
-                                print("총 비용: $\(String(format: "%.6f", totalCost)) (차감될 포인트: \(pointsToDeduct))")
-                                print("누적 비용: $\(String(format: "%.6f", currentSessionCost))")
+                                // print("AI 응답: \(transcript)\n")
+                                // print("비용 내역: 오디오 입력=$\(String(format: "%.6f", audioInputCost)), 텍스트 입력=$\(String(format: "%.6f", textInputCost))")
+                                // print("         캐시된 오디오=$\(String(format: "%.6f", audioCachedCost)), 캐시된 텍스트=$\(String(format: "%.6f", textCachedCost))")
+                                // print("         오디오 출력=$\(String(format: "%.6f", audioOutputCost)), 텍스트 출력=$\(String(format: "%.6f", textOutputCost))")
+                                // print("         음성 기록=$\(String(format: "%.6f", audioCost))")
+                                // print("총 비용: $\(String(format: "%.6f", totalCost)) (차감될 포인트: \(pointsToDeduct))")
+                                // print("누적 비용: $\(String(format: "%.6f", currentSessionCost))")
                                 
                                 // AI 응답 기록
                                 let aiResponse: [String: Any] = [
@@ -969,12 +907,9 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                         }
 
                         if let type = jsonData["type"] as? String, type == "response.function_call_arguments.done" {
-                            print("response.function_call_arguments.done")
                             if let functionName = jsonData["name"] as? String, 
                                let callId = jsonData["call_id"] as? String {
                                 if functionName == "endCall" {
-                                    print("endCall 함수 호출")
-                                    
                                     // 1. 함수 실행 결과를 대화 히스토리에 삽입
                                     let fnResult = "통화가 종료되었습니다." // 함수 실행 결과
                                     let item: [String: Any] = [
@@ -1004,8 +939,6 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                         
                                         // AI가 오디오 출력을 완료할 때까지 기다림
                                     } catch {
-                                        print("함수 호출 결과 전송 오류: \(error)")
-                                        
                                         // 오류 발생 시 바로 종료
                                         disconnect()
                                         if let callManager = self.callManager {
@@ -1022,11 +955,8 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
 
                         // output_audio_buffer.stopped 처리 부분 추가
                         if let type = jsonData["type"] as? String, type == "output_audio_buffer.stopped" {
-                            print("AI 오디오 출력 종료")
-                            
                             // 종료 플래그가 설정되어 있으면 실제로 종료 실행
                             if pendingEndCall {
-                                print("AI 응답 완료 후 종료 실행")
                                 pendingEndCall = false
                                 
                                 // 연결 종료

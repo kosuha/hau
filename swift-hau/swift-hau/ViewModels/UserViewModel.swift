@@ -70,17 +70,11 @@ class UserViewModel: ObservableObject {
 
         Task {
             do {
-                print("사용자 데이터 조회 시도: auth_id=\(userId)")
                 let response = try await client.from("users")
                     .select()
                     .eq("auth_id", value: userId.lowercased()) // Supabase는 UUID를 소문자로 저장하는 경우가 많으므로 소문자 변환 추가
                     .limit(1)
                     .execute()
-
-                // 응답 데이터 확인 (디버깅용)
-                if let jsonString = String(data: response.data, encoding: .utf8) {
-                    print("응답 JSON 문자열: \(jsonString)")
-                }
 
                 // Supabase는 결과를 배열로 반환합니다.
                 let decoder = JSONDecoder()
@@ -112,7 +106,6 @@ class UserViewModel: ObservableObject {
                             // 이름이 비어있지 않으면 온보딩 완료로 간주
                             if let name = profile.name, !name.isEmpty {
                                 self.isOnboardingCompleted = true
-                                print("온보딩 완료: \(name)")
                             } else {
                                 self.isOnboardingCompleted = false // 이름이 없으면 온보딩 미완료
                             }
@@ -146,7 +139,6 @@ class UserViewModel: ObservableObject {
                     // --- 대체 날짜 형식 시도 (선택 사항) ---
                     // 만약 위 형식으로도 실패하면, 다른 형식을 시도해볼 수 있습니다.
                     // 예를 들어 'yyyy-MM-dd' 형식만 오는 경우:
-                    print("기본 날짜 형식 디코딩 실패. 'yyyy-MM-dd' 형식 시도...")
                     dateFormatter.dateFormat = "yyyy-MM-dd"
                     decoder.dateDecodingStrategy = .formatted(dateFormatter)
                     do {
@@ -210,14 +202,10 @@ class UserViewModel: ObservableObject {
         )
 
         // 새 프로필을 데이터베이스에 저장
-        print("새 프로필 저장 시도: auth_id=\(userId)")
         do {
             let insertResponse = try await client.from("users")
                 .insert(newProfile)
                 .execute()
-
-            print("새 프로필 저장 성공: \(insertResponse)")
-            print("응답 상태 코드: \(insertResponse.status)")
 
             // 기본 프로필로 로컬 데이터 설정
             await MainActor.run {
@@ -307,7 +295,6 @@ class UserViewModel: ObservableObject {
         // TODO: 서버 연동 코드 - 테스트 후 주석 해제
         
         guard let userId = userId else {
-            print("사용자 ID가 없습니다.")
             isLoading = false
             return
         }
@@ -397,7 +384,6 @@ class UserViewModel: ObservableObject {
                         // 로그아웃 처리
                         authViewModel.signOut()
                     }
-                    print("회원탈퇴가 성공적으로 처리되었습니다.")
                 } else {
                     // 서버 오류 처리
                     let errorMessage = try? JSONDecoder().decode([String: String].self, from: data)["message"] ?? "알 수 없는 오류"
@@ -501,13 +487,10 @@ class UserViewModel: ObservableObject {
                 let updateData = ["call_time": callTimeJson]
                 
                 // Supabase에 데이터 업데이트
-                print("통화 시간 저장 시도: auth_id=\(userId)")
                 let response = try await client.from("users")
                     .update(updateData)
                     .eq("auth_id", value: userId)
                     .execute()
-
-                print("통화 시간 저장 성공: \(response.status)")
             } catch {
                 print("통화 시간 저장 오류: \(error.localizedDescription)")
             }
