@@ -224,7 +224,7 @@ struct CallView: View {
         }
         
         // POST 요청 준비
-        let url = URL(string: "http://192.168.0.5:3000/api/v1/realtime/sessions")!
+        let url = URL(string: "http://3.34.190.29:3000/api/v1/realtime/sessions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")

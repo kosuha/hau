@@ -26,7 +26,7 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     private var uuid: UUID?
     
     // 서버 API 엔드포인트
-    private let serverURL = "http://192.168.0.5:3000/api/v1"
+    private let serverURL = "http://3.34.190.29:3000/api/v1"
     
     override init() {
         // CallKit 제공자 설정
