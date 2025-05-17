@@ -43,6 +43,9 @@ function initializeAPNProvider() {
       
       apnProvider = new apn.Provider(options);
       fastify.log.info('APN 제공자가 토큰 기반 인증으로 초기화되었습니다.');
+      console.log("APN 키 길이:", typeof process.env.APN_KEY_CONTENT === 'string' ? process.env.APN_KEY_CONTENT.length : 'undefined');
+      console.log("APN 키 ID:", process.env.APN_KEY_ID);
+      console.log("APN 팀 ID:", process.env.APN_TEAM_ID);
     } 
     // 인증서 기반 인증 방식 사용 (대체 방법)
     else if (fs.existsSync(path.join(__dirname, 'cert.pem')) && fs.existsSync(path.join(__dirname, 'key.pem'))) {
