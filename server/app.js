@@ -108,7 +108,7 @@ fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
         ).join("\n");
         historyString = `\n\n[이전 통화 기록]\n${historyText}`;
     }
-    console.log("history", historyString);
+    // console.log("history", historyString);
 
     let background = "";
     if (voice === "Beomsoo") {
@@ -120,7 +120,7 @@ fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
     // 최종 프롬프트 생성
     const finalPrompt = background + customPrompt + userInfo + historyString; // 수정된 변수 사용
     
-    console.log(`사용자 설정: 이름=${user_name}, 음성=${voice || 'ash'}, 언어=${language}`);
+    // console.log(`사용자 설정: 이름=${user_name}, 음성=${voice || 'ash'}, 언어=${language}`);
 
     let apiVoice = 'ash';
     if (voice === "Beomsoo") {
@@ -205,7 +205,7 @@ fastify.post('/api/v1/register-token', async (request, reply) => {
         return reply.code(404).send({ error: '토큰을 등록할 사용자를 찾을 수 없습니다.' });
     }
 
-    fastify.log.info(`Supabase users 테이블 토큰 등록/업데이트: user_id=${user_id}, type=${token_type}, token=${device_token}`);
+    // fastify.log.info(`Supabase users 테이블 토큰 등록/업데이트: user_id=${user_id}, type=${token_type}, token=${device_token}`);
     return { success: true, message: '토큰이 성공적으로 데이터베이스에 등록/업데이트되었습니다.' };
 
   } catch (err) {
@@ -233,19 +233,19 @@ async function sendVoipPushNotification(fastifyInstance, receiverVoipToken, payl
   notification.expiry = Math.floor(Date.now() / 1000) + 3600; // 1시간 후 만료
   notification.payload = payload; // { aps: { ... }, ...customData }
   
-  console.log("APN 토픽:", notification.topic);
-  console.log("APN 알림 설정:", JSON.stringify({
-    priority: notification.priority,
-    pushType: notification.pushType,
-    payload: notification.payload
-  }, null, 2));
+  // console.log("APN 토픽:", notification.topic);
+  // console.log("APN 알림 설정:", JSON.stringify({
+  //   priority: notification.priority,
+  //   pushType: notification.pushType,
+  //   payload: notification.payload
+  // }, null, 2));
 
   try {
     fastifyInstance.log.info(`[VoIP Push Send] 전송 시도: ${notificationKeyForLog} (토큰: ${receiverVoipToken.substring(0,10)}...)`);
     const result = await apnProvider.send(notification, receiverVoipToken);
     
     if (result.sent.length > 0) {
-      fastifyInstance.log.info(`[VoIP Push Send] 성공: ${notificationKeyForLog}`);
+      // fastifyInstance.log.info(`[VoIP Push Send] 성공: ${notificationKeyForLog}`);
       return { success: true, result: result.sent };
     } 
     
@@ -320,7 +320,7 @@ fastify.get('/api/v1/tokens', async (request, reply) => {
 
 // 스케줄러 (매 5분 실행: 다음 5분간의 알림을 수집)
 cron.schedule('*/5 * * * *', async () => {
-  fastify.log.info('5분 스케줄러 실행: 다음 5분간 알림 수집 시작');
+  // fastify.log.info('5분 스케줄러 실행: 다음 5분간 알림 수집 시작');
 
   const now = new Date();
   const currentDayOfWeek = now.toLocaleDateString('ko-KR', { weekday: 'short', timeZone: 'Asia/Seoul' });
@@ -345,7 +345,7 @@ cron.schedule('*/5 * * * *', async () => {
     if (users && users.length > 0) {
       for (const user of users) {
         if (!user.call_time || !user.voip_token || !user.voice) continue;
-        fastify.log.info(`5분 스케줄러 - 사용자 ${user.auth_id}의 스케줄 조회: ${user.call_time}`);
+        // fastify.log.info(`5분 스케줄러 - 사용자 ${user.auth_id}의 스케줄 조회: ${user.call_time}`);
 
         try {
           const schedules = JSON.parse(user.call_time);
@@ -400,7 +400,7 @@ cron.schedule('*/5 * * * *', async () => {
                 preciseScheduledTime: preciseScheduledTimeTodayKST, // Store KST Date object
                 notificationKey: notificationKey,
               });
-              fastify.log.info(`5분 스케줄러 - 알림 대기열 추가: ${notificationKey} for ${preciseScheduledTimeTodayKST.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' })} (Voice: ${user.voice})`);
+              // fastify.log.info(`5분 스케줄러 - 알림 대기열 추가: ${notificationKey} for ${preciseScheduledTimeTodayKST.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' })} (Voice: ${user.voice})`);
             }
           }
         } catch (parseError) {
@@ -439,9 +439,9 @@ setInterval(async () => {
            taskScheduledMinuteKST.getTime() <= currentMinuteMatchKST.getTime();
   });
 
-  if (notificationsDueThisPeriod.length > 0) {
-    fastify.log.info(`1분 발송기 - ${dispatchNowKST.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' })} 처리 대상 (과거 ${PAST_SCHEDULE_TOLERANCE_MINUTES}분 허용): ${notificationsDueThisPeriod.length}건`);
-  }
+  // if (notificationsDueThisPeriod.length > 0) {
+  //   fastify.log.info(`1분 발송기 - ${dispatchNowKST.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' })} 처리 대상 (과거 ${PAST_SCHEDULE_TOLERANCE_MINUTES}분 허용): ${notificationsDueThisPeriod.length}건`);
+  // }
 
   for (const task of notificationsDueThisPeriod) { // 변수명 변경: notificationsDueThisMinute -> notificationsDueThisPeriod
     if (recentNotifications.get(task.notificationKey) === todayDateStringKST) {
@@ -491,7 +491,7 @@ setInterval(async () => {
     // 즉, 허용된 과거 시간 범위보다 더 오래된 것은 제거
     const taskScheduledMinuteKST = new Date(task.preciseScheduledTime.getFullYear(), task.preciseScheduledTime.getMonth(), task.preciseScheduledTime.getDate(), task.preciseScheduledTime.getHours(), task.preciseScheduledTime.getMinutes(), 0, 0);
     if (taskScheduledMinuteKST.getTime() < toleranceStartTimeKST.getTime()) { 
-      fastify.log.info(`1분 발송기 - 대기열에서 매우 오래된 작업 제거: ${task.notificationKey} (예약: ${taskScheduledMinuteKST.toLocaleTimeString('ko-KR', {timeZone: 'Asia/Seoul'})}, 기준: ${toleranceStartTimeKST.toLocaleTimeString('ko-KR', {timeZone: 'Asia/Seoul'})})`);
+      // fastify.log.info(`1분 발송기 - 대기열에서 매우 오래된 작업 제거: ${task.notificationKey} (예약: ${taskScheduledMinuteKST.toLocaleTimeString('ko-KR', {timeZone: 'Asia/Seoul'})}, 기준: ${toleranceStartTimeKST.toLocaleTimeString('ko-KR', {timeZone: 'Asia/Seoul'})})`);
       return false; 
     }
     return true; // 그 외에는 대기열에 유지
@@ -505,7 +505,7 @@ fastify.listen({ port: 3000, host: '0.0.0.0' }, (err, address) => {
     fastify.log.error(err);
     process.exit(1);
   }
-  fastify.log.info(`서버가 ${address} 에서 실행 중입니다.`);
+  // fastify.log.info(`서버가 ${address} 에서 실행 중입니다.`);
 });
 
 // 서버 종료 시 APN 제공자 종료
