@@ -241,7 +241,7 @@ async function sendVoipPushNotification(fastifyInstance, receiverVoipToken, payl
   // }, null, 2));
 
   try {
-    fastifyInstance.log.info(`[VoIP Push Send] 전송 시도: ${notificationKeyForLog} (토큰: ${receiverVoipToken.substring(0,10)}...)`);
+    // fastifyInstance.log.info(`[VoIP Push Send] 전송 시도: ${notificationKeyForLog} (토큰: ${receiverVoipToken.substring(0,10)}...)`);
     const result = await apnProvider.send(notification, receiverVoipToken);
     
     if (result.sent.length > 0) {
