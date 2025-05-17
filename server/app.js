@@ -243,7 +243,8 @@ async function sendVoipPushNotification(fastifyInstance, receiverVoipToken, payl
     } 
     
     if (result.failed.length > 0) {
-      fastifyInstance.log.error(`[VoIP Push Send] 실패: ${notificationKeyForLog}`, result.failed[0].response || result.failed[0].error);
+      fastifyInstance.log.error(`[VoIP Push Send] 실패: ${notificationKeyForLog}`, 
+        JSON.stringify(result.failed[0].response || result.failed[0].error));
       return { success: false, error: result.failed[0].response || result.failed[0].error };
     }
     // 드물게 sent도 failed도 없는 경우가 있을 수 있음
