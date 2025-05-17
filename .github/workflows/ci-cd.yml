@@ -72,11 +72,12 @@ jobs:
             docker stop my-node-container || true
             docker rm my-node-container || true
             echo "Starting new container..."
+            echo -e '${{ secrets.APN_KEY_CONTENT }}' > /tmp/apn_key.p8 && \
             docker run -d \
               -p 3000:3000 \
+              -v /tmp/apn_key.p8:/app/AuthKey.p8 \
+              -e APN_KEY_PATH="/app/AuthKey.p8" \
               -e APN_BUNDLE_ID="${{ secrets.APN_BUNDLE_ID }}" \
-              -e APN_KEY_CONTENT='${{ secrets.APN_KEY_CONTENT }}' \
-              -e APN_KEY_ID="${{ secrets.APN_KEY_ID }}" \
               -e APN_TEAM_ID="${{ secrets.APN_TEAM_ID }}" \
               -e NODE_ENV="${{ secrets.NODE_ENV }}" \
               -e OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \

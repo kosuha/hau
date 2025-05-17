@@ -19,8 +19,7 @@ let apnProvider;
 // Supabase 클라이언트 초기화
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY; // service_role key 권장
-console.log("supabaseUrl", supabaseUrl);
-console.log("supabaseKey", supabaseKey);
+
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // key: userId_originalDay_originalTime (e.g., user123_수_17:05), value: YYYY-MM-DD of last send
@@ -43,9 +42,6 @@ function initializeAPNProvider() {
       
       apnProvider = new apn.Provider(options);
       fastify.log.info('APN 제공자가 토큰 기반 인증으로 초기화되었습니다.');
-      console.log("APN 키 길이:", typeof process.env.APN_KEY_CONTENT === 'string' ? process.env.APN_KEY_CONTENT.length : 'undefined');
-      console.log("APN 키 ID:", process.env.APN_KEY_ID);
-      console.log("APN 팀 ID:", process.env.APN_TEAM_ID);
     } 
     // 인증서 기반 인증 방식 사용 (대체 방법)
     else if (fs.existsSync(path.join(__dirname, 'cert.pem')) && fs.existsSync(path.join(__dirname, 'key.pem'))) {
