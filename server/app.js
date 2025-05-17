@@ -33,7 +33,7 @@ function initializeAPNProvider() {
     if (process.env.APN_KEY_ID && process.env.APN_TEAM_ID && process.env.APN_BUNDLE_ID) {
       const options = {
         token: {
-          key: process.env.APN_KEY_CONTENT || process.env.APN_KEY_PATH || path.join(__dirname, 'AuthKey.p8'),
+          key: process.env.APN_KEY_PATH || path.join(__dirname, 'AuthKey.p8'),
           keyId: process.env.APN_KEY_ID,
           teamId: process.env.APN_TEAM_ID,
         },
