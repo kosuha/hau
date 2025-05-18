@@ -39,20 +39,20 @@ struct VoiceSettingView: View {
                         
                         // 목소리 옵션
                         VStack(spacing: 20) {
-                            // 범수 목소리 옵션
+                            // 남자 목소리 옵션
                             VoiceOptionButton(
-                                title: "범수",
+                                title: "ash",
                                 description: "자상하고 차분한 남자 목소리",
-                                isSelected: userViewModel.selectedVoice == "Beomsoo",
-                                action: { userViewModel.selectedVoice = "Beomsoo" }
+                                isSelected: userViewModel.selectedVoice == "ash",
+                                action: { userViewModel.selectedVoice = "ash" }
                             )
                             
-                            // 진주 목소리 옵션
+                            // 여자 목소리 옵션
                             VoiceOptionButton(
-                                title: "진주",
+                                title: "alloy",
                                 description: "친절하고 밝은 여자 목소리",
-                                isSelected: userViewModel.selectedVoice == "Jinjoo",
-                                action: { userViewModel.selectedVoice = "Jinjoo" }
+                                isSelected: userViewModel.selectedVoice == "alloy",
+                                action: { userViewModel.selectedVoice = "alloy" }
                             )
                         }
                     }

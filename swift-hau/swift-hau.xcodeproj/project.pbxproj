@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		8E178D3B2DAC6D17007E8F9C /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 8E178D3A2DAC6D17007E8F9C /* WebRTC */; };
+		8E514C122DD8FBA3007CC0AC /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 8E514C112DD8FBA3007CC0AC /* WebRTC */; };
 		8EB660FD2DAE4EED00FCBA67 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 8EB660FC2DAE4EED00FCBA67 /* Supabase */; };
 		8EB661062DAE5CEC00FCBA67 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 8EB661052DAE5CEC00FCBA67 /* GoogleSignIn */; };
 		8EB661082DAE5CEC00FCBA67 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 8EB661072DAE5CEC00FCBA67 /* GoogleSignInSwift */; };
@@ -44,7 +44,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8EB660FD2DAE4EED00FCBA67 /* Supabase in Frameworks */,
-				8E178D3B2DAC6D17007E8F9C /* WebRTC in Frameworks */,
+				8E514C122DD8FBA3007CC0AC /* WebRTC in Frameworks */,
 				8EB661062DAE5CEC00FCBA67 /* GoogleSignIn in Frameworks */,
 				8EB661082DAE5CEC00FCBA67 /* GoogleSignInSwift in Frameworks */,
 			);
@@ -89,10 +89,10 @@
 			);
 			name = "swift-hau";
 			packageProductDependencies = (
-				8E178D3A2DAC6D17007E8F9C /* WebRTC */,
 				8EB660FC2DAE4EED00FCBA67 /* Supabase */,
 				8EB661052DAE5CEC00FCBA67 /* GoogleSignIn */,
 				8EB661072DAE5CEC00FCBA67 /* GoogleSignInSwift */,
+				8E514C112DD8FBA3007CC0AC /* WebRTC */,
 			);
 			productName = "swift-hau";
 			productReference = 8EDF8FEB2DA8E78200446E23 /* swift-hau.app */;
@@ -123,9 +123,9 @@
 			mainGroup = 8EDF8FE22DA8E78200446E23;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				8E178D392DAC6D17007E8F9C /* XCRemoteSwiftPackageReference "WebRTC" */,
 				8EB660FB2DAE4EED00FCBA67 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				8EB661042DAE5CEC00FCBA67 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				8E514C102DD8FBA3007CC0AC /* XCLocalSwiftPackageReference "ThirdParty/WebRTCLocal" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8EDF8FEC2DA8E78200446E23 /* Products */;
@@ -299,10 +299,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "swift-hau/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "하우";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSCameraUsageDescription = "";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "이 앱은 통화 기능 테스트를 위해 로컬 네트워크에 접근해야 합니다.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "음성 통화를 위해 마이크 접근 권한이 필요합니다.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -345,10 +345,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "swift-hau/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "하우";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSCameraUsageDescription = "";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "이 앱은 통화 기능 테스트를 위해 로컬 네트워크에 접근해야 합니다.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "음성 통화를 위해 마이크 접근 권한이 필요합니다.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -396,15 +396,14 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		8E178D392DAC6D17007E8F9C /* XCRemoteSwiftPackageReference "WebRTC" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/stasel/WebRTC";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 135.0.0;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		8E514C102DD8FBA3007CC0AC /* XCLocalSwiftPackageReference "ThirdParty/WebRTCLocal" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ThirdParty/WebRTCLocal;
 		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
 		8EB660FB2DAE4EED00FCBA67 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase/supabase-swift.git";
@@ -424,9 +423,8 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		8E178D3A2DAC6D17007E8F9C /* WebRTC */ = {
+		8E514C112DD8FBA3007CC0AC /* WebRTC */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 8E178D392DAC6D17007E8F9C /* XCRemoteSwiftPackageReference "WebRTC" */;
 			productName = WebRTC;
 		};
 		8EB660FC2DAE4EED00FCBA67 /* Supabase */ = {

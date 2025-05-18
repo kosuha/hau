@@ -60,10 +60,10 @@ struct LoginScreen: View {
                         authViewModel.signInWithGoogle()
                     }) {
                         HStack(spacing: 6) {
-                            Image("google_logo") // 구글 로고 이미지 사용 또는 아래 커스텀 뷰 유지
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 22, height: 22)
+                            // Image("google_logo") // 구글 로고 이미지 사용 또는 아래 커스텀 뷰 유지
+                            //     .resizable()
+                            //     .aspectRatio(contentMode: .fit)
+                            //     .frame(width: 22, height: 22)
                             
                             Text("Google로 시작하기")
                                 .font(.system(size: 16, weight: .bold))

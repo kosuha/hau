@@ -108,28 +108,9 @@ fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
         ).join("\n");
         historyString = `\n\n[이전 통화 기록]\n${historyText}`;
     }
-    // console.log("history", historyString);
-
-    let background = "";
-    if (voice === "Beomsoo") {
-        background = "당신의 이름은 '범수'이며 30대 중반 남성이고 직업은 드라마 PD입니다.\n"
-    } else if (voice === "Jinjoo") {
-        background = "당신의 이름은 '진주'이며 30대 초반 여성이고 직업은 드라마 작가입니다.\n"
-    }
     
     // 최종 프롬프트 생성
-    const finalPrompt = background + customPrompt + userInfo + historyString; // 수정된 변수 사용
-    
-    // console.log(`사용자 설정: 이름=${user_name}, 음성=${voice || 'ash'}, 언어=${language}`);
-
-    let apiVoice = 'ash';
-    if (voice === "Beomsoo") {
-        apiVoice = "ash";
-    } else if (voice === "Jinjoo") {
-        apiVoice = "alloy";
-    } else {
-        apiVoice = voice || "ash";
-    }
+    const finalPrompt = customPrompt + userInfo + historyString; // 수정된 변수 사용
     
     // OpenAI API 엔드포인트 및 요청 데이터
     const url = 'https://api.openai.com/v1/realtime/sessions';
@@ -138,7 +119,7 @@ fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
         modalities: ['audio', 'text'],
         instructions: finalPrompt,
         // 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', and 'verse'
-        voice: apiVoice,
+        voice: voice,
         input_audio_transcription: {
             language: language,
             model: 'whisper-1'
@@ -289,7 +270,7 @@ fastify.post('/api/v1/send-call-push', async (request, reply) => {
         return;
       }
       receiverVoipToken = receiverUser.voip_token;
-      caller_name = receiverUser.voice;
+      caller_name = "하우";
       
       const payload = {
         aps: { 'content-available': 1, 'sound': 'default' }, // 'sound'는 VoIP 알림 시 시스템 소리/진동 유도
@@ -457,8 +438,8 @@ setInterval(async () => {
       },
       uuid: scheduledCallUUID,
       caller_id: task.userId,           // 알림 받는 사용자 자신의 ID
-      caller_name: task.userVoice,      // 사용자의 voice 정보
-      handle: task.userVoice,           // 사용자의 voice 정보
+      caller_name: "하우",
+      handle: "하우",
       notification_type: 'direct_call', 
       
       // original_schedule_info: {

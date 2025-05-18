@@ -12,7 +12,7 @@ import Supabase
 
 class UserViewModel: ObservableObject {
     @Published var userData: UserModel = UserModel()
-    @Published var selectedVoice: String = "Beomsoo"
+    @Published var selectedVoice: String = "ash"
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
     @Published var isOnboardingCompleted: Bool = false
@@ -21,7 +21,7 @@ class UserViewModel: ObservableObject {
     private var originalName: String?
     private var originalBirthdate: Date?
     private var originalSelfStory: String?
-    private var originalVoice: String = "Beomsoo"
+    private var originalVoice: String = "ash"
     
     // 사용자 ID 추가
     private var userId: String? = nil
@@ -95,13 +95,13 @@ class UserViewModel: ObservableObject {
                         // 프로필 데이터가 성공적으로 디코딩되고 존재하는 경우
                         await MainActor.run {
                             self.userData = profile
-                            self.selectedVoice = profile.voice ?? "Beomsoo"
+                            self.selectedVoice = profile.voice ?? "ash"
 
                             // 원본 데이터 저장 (fetch 성공 시점에 원본 데이터 업데이트)
                             self.originalName = profile.name
                             self.originalBirthdate = profile.birthdate
                             self.originalSelfStory = profile.selfIntro
-                            self.originalVoice = profile.voice ?? "Beomsoo"
+                            self.originalVoice = profile.voice ?? "ash"
 
                             // 이름이 비어있지 않으면 온보딩 완료로 간주
                             if let name = profile.name, !name.isEmpty {
@@ -195,7 +195,7 @@ class UserViewModel: ObservableObject {
             birthdate: nil,
             name: "",
             selfIntro: "",
-            voice: "Beomsoo",
+            voice: "ash",
             callTime: "",
             plan: "free",
             authId: userId
@@ -210,13 +210,13 @@ class UserViewModel: ObservableObject {
             // 기본 프로필로 로컬 데이터 설정
             await MainActor.run {
                 self.userData = newProfile
-                self.selectedVoice = "Beomsoo"
+                self.selectedVoice = "ash"
 
                 // 원본 데이터 저장 (새 프로필 생성 시점에도 원본 데이터 업데이트)
                 self.originalName = ""
                 self.originalBirthdate = nil
                 self.originalSelfStory = ""
-                self.originalVoice = "Beomsoo"
+                self.originalVoice = "ash"
 
                 self.isOnboardingCompleted = false // 새 프로필은 온보딩 미완료 상태
                 self.isLoading = false
@@ -317,7 +317,7 @@ class UserViewModel: ObservableObject {
                     self.originalName = self.userData.name
                     self.originalBirthdate = self.userData.birthdate
                     self.originalSelfStory = self.userData.selfIntro
-                    self.originalVoice = self.userData.voice ?? "Beomsoo"
+                    self.originalVoice = self.userData.voice ?? "ash"
                     
                     self.isLoading = false
 
@@ -460,7 +460,7 @@ class UserViewModel: ObservableObject {
                     self.originalName = self.userData.name
                     self.originalBirthdate = self.userData.birthdate
                     self.originalSelfStory = self.userData.selfIntro
-                    self.originalVoice = self.userData.voice ?? "Beomsoo"
+                    self.originalVoice = self.userData.voice ?? "ash"
                 }
             } catch {
                 print("프로필 저장 오류: \(error.localizedDescription)")

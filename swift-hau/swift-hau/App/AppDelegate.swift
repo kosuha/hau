@@ -3,6 +3,7 @@ import PushKit
 import CallKit
 import AVFoundation
 import GoogleSignIn
+import BackgroundTasks
 
 class AppDelegate: NSObject, UIApplicationDelegate, PKPushRegistryDelegate {
     // CallManager 싱글톤 인스턴스 참조
@@ -11,6 +12,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, PKPushRegistryDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {        
         // 오디오 세션 설정
         configureAudioSession()
+
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.seonhokim.swift-hau.refresh",
+                                        using: nil) { task in
+            // 백그라운드 작업 처리
+            task.setTaskCompleted(success: true)
+        }
         
         return true
     }
