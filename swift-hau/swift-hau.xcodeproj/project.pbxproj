@@ -299,7 +299,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "swift-hau/Info.plist";
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_CFBundleDisplayName = "하우";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSCameraUsageDescription = "";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "이 앱은 통화 기능 테스트를 위해 로컬 네트워크에 접근해야 합니다.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "";
@@ -345,7 +346,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "swift-hau/Info.plist";
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_CFBundleDisplayName = "하우";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSCameraUsageDescription = "";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "이 앱은 통화 기능 테스트를 위해 로컬 네트워크에 접근해야 합니다.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "";

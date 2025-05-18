@@ -49,5 +49,7 @@
 		<string>com.seonhokim.swift-hau.refresh</string>
 		<string>com.seonhokim.swift-hau.cleanup</string>
 	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

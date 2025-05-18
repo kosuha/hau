@@ -75,7 +75,7 @@ struct CallView: View {
                         }
 
                         // 통화 상대
-                        Text(userViewModel.userData.voice ?? "HAU")
+                        Text("하우")
                             .font(.system(size: 32, weight: .bold))
                             .foregroundColor(AppTheme.Colors.light)
 
