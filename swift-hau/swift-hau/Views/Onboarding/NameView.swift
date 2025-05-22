@@ -10,6 +10,7 @@ import SwiftUI
 struct NameView: View {
     @EnvironmentObject var userViewModel: UserViewModel
     @State private var name: String = ""
+    @FocusState private var isNameFocused: Bool
     var onNext: () -> Void
     
     // 초기화
@@ -66,6 +67,7 @@ struct NameView: View {
                 
                 // 이름 입력 필드
                 TextField("이름 입력 (최대 12자)", text: $name)
+                    .focused($isNameFocused)
                     .font(.system(size: 16))
                     .foregroundColor(AppTheme.Colors.dark)
                     .padding(.horizontal, 16)
@@ -118,6 +120,9 @@ struct NameView: View {
             if let savedName = userViewModel.userData.name {
                 name = savedName
             }
+        }
+        .onTapGesture {
+            isNameFocused = false
         }
     }
 }

@@ -19,6 +19,9 @@ struct ProfileView: View {
     @State private var showDeleteAccountAlert = false
     @State private var showSaveCompleteAlert = false
     
+    @FocusState private var isNameFocused: Bool
+    @FocusState private var isSelfIntroFocused: Bool
+    
     var body: some View {
         VStack(spacing: 16) {
             // 헤더
@@ -42,6 +45,8 @@ struct ProfileView: View {
                             .font(.system(size: 16, weight: .medium))
                         
                         TextField("이름을 입력하세요", text: userViewModel.nameBinding)
+                            .focused($isNameFocused)
+                            .keyboardType(.default)
                             .padding(.horizontal, 20)
                             .frame(height: 50)
                             .background(Color.white)
@@ -89,6 +94,8 @@ struct ProfileView: View {
                         
                         ZStack(alignment: .bottomTrailing) {
                             TextEditor(text: userViewModel.selfIntroBinding)
+                                .focused($isSelfIntroFocused)
+                                .keyboardType(.default)
                                 .padding(20)
                                 .frame(height: 300)
                                 .background(Color.white)
@@ -193,6 +200,11 @@ struct ProfileView: View {
             Button("확인", role: .cancel) { }
         } message: {
             Text("프로필이 성공적으로 저장되었습니다.")
+        }
+        
+        .onTapGesture {
+            isNameFocused = false
+            isSelfIntroFocused = false
         }
         
         // .onAppear {

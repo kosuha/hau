@@ -2,6 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.seonhokim.swift-hau.refresh</string>
+		<string>com.seonhokim.swift-hau.cleanup</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -16,6 +21,8 @@
 	</array>
 	<key>GIDClientID</key>
 	<string>$(GOOGLE_CLIENT_ID)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSExceptionDomains</key>
@@ -35,7 +42,6 @@
 	</array>
 	<key>PKPushUsageDescription</key>
 	<string>통화 알림을 받기 위해 푸시 알림을 사용합니다.</string>
-
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
@@ -43,13 +49,5 @@
 		<string>voip</string>
 		<string>processing</string>
 	</array>
-
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>com.seonhokim.swift-hau.refresh</string>
-		<string>com.seonhokim.swift-hau.cleanup</string>
-	</array>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 </dict>
 </plist>

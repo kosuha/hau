@@ -27,6 +27,11 @@ class UserViewModel: ObservableObject {
     private var userId: String? = nil
     let maxLength = 2000
     
+    // userId를 외부에서 읽을 수 있는 getter 제공
+    var getUserId: String? {
+        return userId
+    }
+    
     // 프로필 수정 여부 계산 속성
     var isModified: Bool {
         // userData의 현재 값과 original 값을 비교
@@ -55,7 +60,14 @@ class UserViewModel: ObservableObject {
     // 사용자 ID 설정 (로그인 후 호출)
     func setUserId(_ id: String) {
         userId = id
-        fetchUserData() // 사용자 ID가 설정되면 데이터 가져오기
+        // fetchUserData() 자동 호출을 제거 - 중복 호출 방지
+    }
+    
+    // 데이터가 필요할 때만 데이터를 가져오는 메소드 추가
+    func fetchDataIfNeeded() {
+        if userId != nil {
+            fetchUserData()
+        }
     }
     
     // 서버에서 사용자 데이터 가져오기
@@ -70,115 +82,90 @@ class UserViewModel: ObservableObject {
 
         Task {
             do {
-                let response = try await client.from("users")
-                    .select()
-                    .eq("auth_id", value: userId.lowercased()) // Supabase는 UUID를 소문자로 저장하는 경우가 많으므로 소문자 변환 추가
-                    .limit(1)
+                // 사용자 정보가 이미 존재하는지 먼저 확인
+                let checkResponse = try await client.from("users")
+                    .select("auth_id")
+                    .eq("auth_id", value: userId.lowercased())
                     .execute()
 
-                // Supabase는 결과를 배열로 반환합니다.
+                // 응답 데이터에서 사용자 존재 여부 확인
                 let decoder = JSONDecoder()
-                let dateFormatter = DateFormatter()
-                // 밀리초(.SSS) 부분을 제거하여 좀 더 일반적인 ISO 8601 형식 처리
-                dateFormatter.dateFormat = "yyyy-MM-dd"
-                // 타임존 설정 (필요한 경우)
-                // dateFormatter.timeZone = TimeZone(secondsFromGMT: 0) // UTC
-                dateFormatter.locale = Locale(identifier: "en_US_POSIX") // ISO 8601 파싱에는 고정 로케일 사용 권장
-                decoder.dateDecodingStrategy = .formatted(dateFormatter)
+                if let users = try? decoder.decode([UserModel].self, from: checkResponse.data), !users.isEmpty {
+                    // 사용자가 이미 존재함 - 전체 데이터 조회
+                    let response = try await client.from("users")
+                        .select()
+                        .eq("auth_id", value: userId.lowercased())
+                        .limit(1)
+                        .execute()
 
-                // 1. 디코딩 시도
-                do {
-                    let profiles = try decoder.decode([UserModel].self, from: response.data)
-
-                    // 2. 프로필 존재 여부 확인
-                    if let profile = profiles.first {
-                        // 프로필 데이터가 성공적으로 디코딩되고 존재하는 경우
-                        await MainActor.run {
-                            self.userData = profile
-                            self.selectedVoice = profile.voice ?? "ash"
-
-                            // 원본 데이터 저장 (fetch 성공 시점에 원본 데이터 업데이트)
-                            self.originalName = profile.name
-                            self.originalBirthdate = profile.birthdate
-                            self.originalSelfStory = profile.selfIntro
-                            self.originalVoice = profile.voice ?? "ash"
-
-                            // 이름이 비어있지 않으면 온보딩 완료로 간주
-                            if let name = profile.name, !name.isEmpty {
-                                self.isOnboardingCompleted = true
-                            } else {
-                                self.isOnboardingCompleted = false // 이름이 없으면 온보딩 미완료
-                            }
-
-                            self.isLoading = false
-                        }
-                    } else {
-                        // 3. 프로필 데이터가 없는 경우 (배열이 비어 있음)
-                        print("사용자 프로필을 찾을 수 없습니다. 새 프로필을 생성합니다.")
-                        await createAndSaveNewProfile(userId: userId)
-                    }
-                } catch let decodingError {
-                    // 4. 디코딩 오류 발생
-                    print("디코딩 오류: \(decodingError.localizedDescription)")
-                    // 디코딩 오류에 대한 상세 정보 출력
-                    if let decodingError = decodingError as? DecodingError {
-                        switch decodingError {
-                        case .typeMismatch(let type, let context):
-                            print("Type mismatch: \(type), Context: \(context.codingPath) - \(context.debugDescription)")
-                        case .valueNotFound(let type, let context):
-                            print("Value not found: \(type), Context: \(context.codingPath) - \(context.debugDescription)")
-                        case .keyNotFound(let key, let context):
-                            print("Key not found: \(key), Context: \(context.codingPath) - \(context.debugDescription)")
-                        case .dataCorrupted(let context):
-                            print("Data corrupted: Context: \(context.codingPath) - \(context.debugDescription)")
-                        @unknown default:
-                            print("Unknown decoding error")
-                        }
-                    }
-
-                    // --- 대체 날짜 형식 시도 (선택 사항) ---
-                    // 만약 위 형식으로도 실패하면, 다른 형식을 시도해볼 수 있습니다.
-                    // 예를 들어 'yyyy-MM-dd' 형식만 오는 경우:
+                    let dateFormatter = DateFormatter()
                     dateFormatter.dateFormat = "yyyy-MM-dd"
+                    dateFormatter.locale = Locale(identifier: "en_US_POSIX")
                     decoder.dateDecodingStrategy = .formatted(dateFormatter)
+
                     do {
                         let profiles = try decoder.decode([UserModel].self, from: response.data)
                         if let profile = profiles.first {
-                            print("'yyyy-MM-dd' 형식으로 디코딩 성공.")
-                            // ... 성공 시 프로필 데이터 처리 (위와 동일 로직) ...
                             await MainActor.run {
                                 self.userData = profile
-                                self.selectedVoice = profile.voice ?? "Beomsoo"
-                                // ... 원본 데이터 저장 ...
-                                // ... 온보딩 상태 확인 ...
+                                self.selectedVoice = profile.voice ?? "ash"
+
+                                // 원본 데이터 저장
+                                self.originalName = profile.name
+                                self.originalBirthdate = profile.birthdate
+                                self.originalSelfStory = profile.selfIntro
+                                self.originalVoice = profile.voice ?? "ash"
+
+                                // 이름이 비어있지 않으면 온보딩 완료로 간주
+                                if let name = profile.name, !name.isEmpty {
+                                    self.isOnboardingCompleted = true
+                                } else {
+                                    self.isOnboardingCompleted = false
+                                }
+
                                 self.isLoading = false
                             }
-                            // 성공했으므로 함수 종료
-                            return
                         } else {
-                            // 'yyyy-MM-dd' 형식으로 디코딩은 성공했으나 데이터가 없는 경우
-                            print("대체 형식 디코딩 후 프로필 없음. 새 프로필 생성.")
-                            await createAndSaveNewProfile(userId: userId)
-                            return // 함수 종료
-                        }
-                    } catch let secondDecodingError {
-                        print("대체 날짜 형식 ('yyyy-MM-dd') 디코딩 오류: \(secondDecodingError.localizedDescription)")
-                        // 최종 실패 처리
-                        await MainActor.run {
-                            self.errorMessage = "사용자 데이터를 처리하는 중 오류가 발생했습니다. (날짜 형식 오류)"
+                            print("프로필 데이터가 비어 있습니다.")
                             self.isLoading = false
                         }
+                    } catch {
+                        print("디코딩 오류: \(error.localizedDescription)")
+                        // 디코딩 오류 발생 시 다른 형식 시도
+                        dateFormatter.dateFormat = "yyyy-MM-dd"
+                        decoder.dateDecodingStrategy = .formatted(dateFormatter)
+                        
+                        if let profiles = try? decoder.decode([UserModel].self, from: response.data),
+                           let profile = profiles.first {
+                            await MainActor.run {
+                                self.userData = profile
+                                self.selectedVoice = profile.voice ?? "ash"
+                                self.originalName = profile.name
+                                self.originalBirthdate = profile.birthdate
+                                self.originalSelfStory = profile.selfIntro
+                                self.originalVoice = profile.voice ?? "ash"
+                                
+                                if let name = profile.name, !name.isEmpty {
+                                    self.isOnboardingCompleted = true
+                                } else {
+                                    self.isOnboardingCompleted = false
+                                }
+                                
+                                self.isLoading = false
+                            }
+                        } else {
+                            await MainActor.run {
+                                self.errorMessage = "사용자 데이터를 처리하는 중 오류가 발생했습니다."
+                                self.isLoading = false
+                            }
+                        }
                     }
-                    // --- 대체 날짜 형식 시도 끝 ---
-
-                    // 만약 대체 형식 시도를 하지 않는다면, 아래 코드는 유지합니다.
-                    // await MainActor.run {
-                    //     self.errorMessage = "사용자 데이터를 처리하는 중 오류가 발생했습니다. (형식 오류)"
-                    //     self.isLoading = false
-                    // }
+                } else {
+                    // 사용자가 존재하지 않음 - 새 프로필 생성
+                    print("사용자 프로필을 찾을 수 없습니다. 새 프로필을 생성합니다.")
+                    await createAndSaveNewProfile(userId: userId)
                 }
             } catch {
-                // 5. 네트워크 오류 또는 기타 Supabase 관련 오류
                 print("Supabase 데이터 조회 오류: \(error.localizedDescription)")
                 await MainActor.run {
                     self.errorMessage = "데이터를 가져오는 중 오류가 발생했습니다."

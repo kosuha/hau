@@ -11,6 +11,7 @@ struct SelfIntroView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var userViewModel: UserViewModel
     @State private var text: String = ""
+    @FocusState private var isTextFocused: Bool
     private let maxLength = 2000
     var onNext: () -> Void
     var onBack: () -> Void
@@ -71,6 +72,7 @@ struct SelfIntroView: View {
                     // 자기 소개 입력 영역
                     ZStack(alignment: .bottomTrailing) {
                         TextEditor(text: $text)
+                            .focused($isTextFocused)
                             .font(.system(size: 16))
                             .foregroundColor(AppTheme.Colors.dark)
                             .frame(minHeight: 200)
@@ -128,6 +130,9 @@ struct SelfIntroView: View {
             // userData에 값이 채워져 있다면 해당 값을 사용하게 됩니다.
             // 만약 fetchUserData 전에 이 뷰가 나타나면 초기값("")이 표시될 수 있습니다.
             text = userViewModel.userData.selfIntro ?? ""
+        }
+        .onTapGesture {
+            isTextFocused = false
         }
     }
 }

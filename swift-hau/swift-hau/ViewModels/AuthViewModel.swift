@@ -59,6 +59,8 @@ class AuthViewModel: NSObject, ObservableObject {
                 // UserViewModel에 실제 사용자 ID 설정 - UUID를 문자열로 변환
                 if let userViewModel = self.userViewModel {
                     userViewModel.setUserId(user.id.uuidString)
+                    // 데이터 가져오기 호출
+                    userViewModel.fetchDataIfNeeded()
                 }
                 
                 // CallManager에도 사용자 ID 설정하고 VoIP 설정
@@ -171,7 +173,7 @@ class AuthViewModel: NSObject, ObservableObject {
                     if let userViewModel = self.userViewModel {
                         userViewModel.setUserId(response.user.id.uuidString)
                         // 명시적으로 사용자 데이터 가져오기
-                        Task { await userViewModel.fetchUserData() }
+                        userViewModel.fetchDataIfNeeded()
                     }
                     
                     // CallManager에도 사용자 ID 설정하고 VoIP 설정
@@ -312,7 +314,7 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                     if let userViewModel = self.userViewModel {
                         userViewModel.setUserId(response.user.id.uuidString)
                         // 명시적으로 사용자 데이터 가져오기
-                        Task { await userViewModel.fetchUserData() }
+                        userViewModel.fetchDataIfNeeded()
                     }
                     
                     self.isLoading = false

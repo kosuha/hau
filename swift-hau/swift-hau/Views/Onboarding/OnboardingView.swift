@@ -59,6 +59,16 @@ struct OnboardingView: View {
     }
     
     private func completeOnboarding() {
+        // 온보딩 완료 시 사용자 데이터 저장
+        userViewModel.saveProfile()
+        userViewModel.isOnboardingCompleted = true
+        
+        // CallManager에 사용자 ID 설정
+        if let userId = userViewModel.getUserId {
+            CallManager.shared.setUserId(userId)
+            CallManager.shared.setupVoIP()
+        }
+        
         // 온보딩 완료 후 메인 화면으로 돌아가기
         onComplete()
     }

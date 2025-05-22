@@ -206,30 +206,27 @@ async function sendVoipPushNotification(fastifyInstance, receiverVoipToken, payl
   notification.expiry = Math.floor(Date.now() / 1000) + 3600; // 1시간 후 만료
   notification.payload = payload; // { aps: { ... }, ...customData }
   
-  // console.log("APN 토픽:", notification.topic);
-  // console.log("APN 알림 설정:", JSON.stringify({
-  //   priority: notification.priority,
-  //   pushType: notification.pushType,
-  //   payload: notification.payload
-  // }, null, 2));
+  fastifyInstance.log.info(`[VoIP Push Send] 전송 시도: ${notificationKeyForLog} (토큰 시작: ${receiverVoipToken.substring(0,10)}...)`);
+  fastifyInstance.log.info(`[VoIP Push Send] 알림 페이로드: ${JSON.stringify(notification.payload)}`);
 
   try {
-    // fastifyInstance.log.info(`[VoIP Push Send] 전송 시도: ${notificationKeyForLog} (토큰: ${receiverVoipToken.substring(0,10)}...)`);
     const result = await apnProvider.send(notification, receiverVoipToken);
     
     if (result.sent.length > 0) {
-      // fastifyInstance.log.info(`[VoIP Push Send] 성공: ${notificationKeyForLog}`);
+      fastifyInstance.log.info(`[VoIP Push Send] 성공: ${notificationKeyForLog}`);
       return { success: true, result: result.sent };
     } 
     
     if (result.failed.length > 0) {
+      const error = result.failed[0];
       fastifyInstance.log.error(`[VoIP Push Send] 실패: ${notificationKeyForLog}`, 
-        JSON.stringify(result.failed[0]));
-      console.error("APN 전송 실패 상세:", JSON.stringify(result.failed, null, 2));
-      return { success: false, error: result.failed[0].response || result.failed[0].error };
+        JSON.stringify(error));
+      fastifyInstance.log.error(`[VoIP Push Send] 상세 에러: 상태=${error.status}, 응답=${JSON.stringify(error.response)}, 오류=${error.error}`);
+      
+      return { success: false, error: error.response || error.error };
     }
     // 드물게 sent도 failed도 없는 경우가 있을 수 있음
-    fastifyInstance.log.warn(`[VoIP Push Send] 알 수 없는 결과: ${notificationKeyForLog}`, result);
+    fastifyInstance.log.warn(`[VoIP Push Send] 알 수 없는 결과: ${notificationKeyForLog}`, JSON.stringify(result));
     return { success: false, error: 'Unknown APN send result' };
 
   } catch (error) {
@@ -247,43 +244,50 @@ fastify.post('/api/v1/send-call-push', async (request, reply) => {
   }
 
   const callUUID = uuidv4(); // 통화 시도에 대한 고유 ID
+  fastify.log.info(`[send-call-push] 새 통화 요청: caller_id=${caller_id}, receiver_id=${receiver_id}, callUUID=${callUUID}`);
 
-  setTimeout(async () => {
-    let receiverVoipToken;
-    try {
-      const { data: receiverUser, error: fetchError } = await supabase
-        .from('users')
-        .select('voip_token, voice')
-        .eq('auth_id', receiver_id)
-        .single();
+  // setTimeout 제거하고 즉시 처리
+  let receiverVoipToken;
+  try {
+    const { data: receiverUser, error: fetchError } = await supabase
+      .from('users')
+      .select('voip_token, voice')
+      .eq('auth_id', receiver_id)
+      .single();
 
-      if (fetchError || !receiverUser || !receiverUser.voip_token || !receiverUser.voice) {
-        fastify.log.error(`[send-call-push] 수신자(ID: ${receiver_id}) 토큰 조회 실패 또는 없음:`, fetchError || '토큰 없음');
-        return;
-      }
-      receiverVoipToken = receiverUser.voip_token;
-      caller_name = "하우";
-      
-      const payload = {
-        aps: { 'content-available': 1, 'sound': 'default' }, // 'sound'는 VoIP 알림 시 시스템 소리/진동 유도
-        uuid: callUUID, // 통화 식별자 (클라이언트에서 CallKit 시작 시 사용)
-        caller_id: caller_id,
-        caller_name: caller_name,
-        handle: caller_name, // CallKit에 표시될 발신자 정보
-        notification_type: 'direct_call' // 알림 타입 명시
-      };
-      const notificationKeyForLog = `direct_call_to_${receiver_id}_from_${caller_id}`;
-      
-      // 함수화된 푸시 알림 로직 호출
-      await sendVoipPushNotification(fastify, receiverVoipToken, payload, notificationKeyForLog);
-      // 결과 로깅은 sendVoipPushNotification 함수 내부에서 처리
-
-    } catch (err) {
-      fastify.log.error(`[send-call-push] 처리 중 예외 (수신자 ${receiver_id}):`, err);
+    if (fetchError || !receiverUser || !receiverUser.voip_token || !receiverUser.voice) {
+      fastify.log.error(`[send-call-push] 수신자(ID: ${receiver_id}) 토큰 조회 실패 또는 없음:`, fetchError || '토큰 없음');
+      return reply.code(400).send({ error: '수신자 토큰을 찾을 수 없습니다.' });
     }
-  }, 1000);
+    receiverVoipToken = receiverUser.voip_token;
+    caller_name = "하우";
+    
+    const payload = {
+      aps: { 'content-available': 1, 'sound': 'default' }, // 'sound'는 VoIP 알림 시 시스템 소리/진동 유도
+      uuid: callUUID, // 통화 식별자 (클라이언트에서 CallKit 시작 시 사용)
+      caller_id: caller_id,
+      caller_name: caller_name,
+      handle: caller_name, // CallKit에 표시될 발신자 정보
+      notification_type: 'direct_call' // 알림 타입 명시
+    };
+    const notificationKeyForLog = `direct_call_to_${receiver_id}_from_${caller_id}`;
+    
+    // 함수화된 푸시 알림 로직 호출
+    const pushResult = await sendVoipPushNotification(fastify, receiverVoipToken, payload, notificationKeyForLog);
+    
+    // 푸시 결과 로깅 및 응답
+    if (pushResult.success) {
+      fastify.log.info(`[send-call-push] 푸시 전송 성공: ${notificationKeyForLog}, callUUID=${callUUID}`);
+      return reply.send({ success: true, message: "통화 푸시가 성공적으로 전송되었습니다.", call_attempt_uuid: callUUID });
+    } else {
+      fastify.log.error(`[send-call-push] 푸시 전송 실패: ${notificationKeyForLog}, 오류:`, pushResult.error);
+      return reply.code(500).send({ success: false, message: "통화 푸시 전송에 실패했습니다.", error: pushResult.error });
+    }
 
-  return reply.send({ success: true, message: "통화 푸시 요청이 접수되었습니다.", call_attempt_uuid: callUUID });
+  } catch (err) {
+    fastify.log.error(`[send-call-push] 처리 중 예외 (수신자 ${receiver_id}):`, err);
+    return reply.code(500).send({ success: false, message: "서버 내부 오류로 통화 푸시 전송에 실패했습니다." });
+  }
 });
 
 // 테스트용 엔드포인트 - 등록된 토큰 목록 조회
