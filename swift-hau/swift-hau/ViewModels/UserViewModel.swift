@@ -19,7 +19,6 @@ class UserViewModel: ObservableObject {
     
     // 원본 데이터 추적 (프로필 수정 용도)
     private var originalName: String?
-    private var originalBirthdate: Date?
     private var originalSelfStory: String?
     private var originalVoice: String = "ash"
     
@@ -37,11 +36,10 @@ class UserViewModel: ObservableObject {
         // userData의 현재 값과 original 값을 비교
         // 옵셔널 값 비교 시 nil 처리 주의
         let nameChanged = userData.name != originalName
-        let birthdateChanged = userData.birthdate != originalBirthdate
         // selfIntro가 nil일 경우 빈 문자열로 간주하여 비교
         let selfStoryChanged = (userData.selfIntro ?? "") != (originalSelfStory ?? "")
 
-        return nameChanged || birthdateChanged || selfStoryChanged
+        return nameChanged || selfStoryChanged
     }
     
     // 음성 설정 관련 수정 여부 확인
@@ -112,7 +110,6 @@ class UserViewModel: ObservableObject {
 
                                 // 원본 데이터 저장
                                 self.originalName = profile.name
-                                self.originalBirthdate = profile.birthdate
                                 self.originalSelfStory = profile.selfIntro
                                 self.originalVoice = profile.voice ?? "ash"
 
@@ -141,7 +138,6 @@ class UserViewModel: ObservableObject {
                                 self.userData = profile
                                 self.selectedVoice = profile.voice ?? "ash"
                                 self.originalName = profile.name
-                                self.originalBirthdate = profile.birthdate
                                 self.originalSelfStory = profile.selfIntro
                                 self.originalVoice = profile.voice ?? "ash"
                                 
@@ -179,7 +175,6 @@ class UserViewModel: ObservableObject {
     private func createAndSaveNewProfile(userId: String) async {
         // 기본 사용자 프로필 생성
         let newProfile = UserModel(
-            birthdate: nil,
             name: "",
             selfIntro: "",
             voice: "ash",
@@ -201,7 +196,6 @@ class UserViewModel: ObservableObject {
 
                 // 원본 데이터 저장 (새 프로필 생성 시점에도 원본 데이터 업데이트)
                 self.originalName = ""
-                self.originalBirthdate = nil
                 self.originalSelfStory = ""
                 self.originalVoice = "ash"
 
@@ -255,7 +249,6 @@ class UserViewModel: ObservableObject {
     func cancelEditing() {
         // userData를 원본 데이터로 복원
         userData.name = originalName
-        userData.birthdate = originalBirthdate
         userData.selfIntro = originalSelfStory
         // isModified는 자동으로 false가 됨 (computed property)
     }
@@ -272,7 +265,6 @@ class UserViewModel: ObservableObject {
         // 더미 저장 동작 - 로컬 상태만 즉시 업데이트
         // 원본 데이터 업데이트
         // self.originalName = self.userData.name
-        // self.originalBirthdate = self.userData.birthdate
         // self.originalSelfStory = self.userData.selfIntro
         // self.originalVoice = self.userData.voice ?? "Beomsoo"
         
@@ -302,7 +294,6 @@ class UserViewModel: ObservableObject {
                 await MainActor.run {
                     // 원본 데이터 업데이트 (저장 성공 시점에 원본 데이터 업데이트)
                     self.originalName = self.userData.name
-                    self.originalBirthdate = self.userData.birthdate
                     self.originalSelfStory = self.userData.selfIntro
                     self.originalVoice = self.userData.voice ?? "ash"
                     
@@ -342,7 +333,6 @@ class UserViewModel: ObservableObject {
         if let id = userId {
             let defaults = UserDefaults.standard
             defaults.removeObject(forKey: keyFor("userName"))
-            defaults.removeObject(forKey: keyFor("userBirthdate"))
             defaults.removeObject(forKey: keyFor("userSelfStory"))
             defaults.removeObject(forKey: keyFor("userVoice"))
             defaults.removeObject(forKey: keyFor("userCallTime"))
@@ -387,14 +377,6 @@ class UserViewModel: ObservableObject {
         
         print("회원탈퇴 요청이 전송되었습니다.")
     }
-    
-    var formattedBirthdate: String {
-        guard let birthdate = userData.birthdate else { return "생년월일을 선택하세요" } // Placeholder 추가
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy년 M월 d일" // 원하는 형식으로 변경
-        formatter.locale = Locale(identifier: "ko_KR")
-        return formatter.string(from: birthdate)
-    }
 
     // ProfileView의 TextEditor 바인딩을 위한 헬퍼
     // userData.selfIntro가 String? 이므로, Non-optional String 바인딩 제공
@@ -411,15 +393,6 @@ class UserViewModel: ObservableObject {
         Binding<String>(
             get: { self.userData.name ?? "" },
             set: { self.userData.name = $0 }
-        )
-    }
-
-    // ProfileView의 DatePickerSheet 바인딩을 위한 헬퍼
-    // userData.birthdate가 Date? 이므로, Non-optional Date 바인딩 제공 (기본값 설정)
-    var birthdateBinding: Binding<Date> {
-        Binding<Date>(
-            get: { self.userData.birthdate ?? Date() }, // 기본값으로 현재 날짜 사용 또는 다른 적절한 기본값 설정
-            set: { self.userData.birthdate = $0 }
         )
     }
 
@@ -445,7 +418,6 @@ class UserViewModel: ObservableObject {
                 // 원본 데이터 업데이트 (저장 성공 시점에 원본 데이터 업데이트)
                 await MainActor.run {
                     self.originalName = self.userData.name
-                    self.originalBirthdate = self.userData.birthdate
                     self.originalSelfStory = self.userData.selfIntro
                     self.originalVoice = self.userData.voice ?? "ash"
                 }

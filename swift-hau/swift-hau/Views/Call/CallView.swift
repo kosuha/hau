@@ -164,13 +164,6 @@ struct CallView: View {
             "history": []
         ]
         
-        // 사용자 정보 추가
-        if let birthdate = userViewModel.userData.birthdate {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            callSettings["birthdate"] = formatter.string(from: birthdate)
-        }
-        
         if let selfIntro = userViewModel.userData.selfIntro {
             callSettings["self_intro"] = selfIntro
         }

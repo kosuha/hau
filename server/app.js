@@ -41,7 +41,7 @@ function initializeAPNProvider() {
       };
       
       apnProvider = new apn.Provider(options);
-      fastify.log.info('APN 제공자가 토큰 기반 인증으로 초기화되었습니다.');
+      // fastify.log.info('APN 제공자가 토큰 기반 인증으로 초기화되었습니다.');
     } 
     // 인증서 기반 인증 방식 사용 (대체 방법)
     else if (fs.existsSync(path.join(__dirname, 'cert.pem')) && fs.existsSync(path.join(__dirname, 'key.pem'))) {
@@ -82,7 +82,7 @@ fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
   const basePrompt = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf8');
   
   // 클라이언트에서 보낸 사용자 정보 추출
-  const { user_name, birthdate, self_intro, voice, history, language = 'ko' } = request.body || {};
+  const { user_name, self_intro, voice, history, language = 'ko' } = request.body || {};
   
   // 사용자 정보를 프롬프트에 추가
   let customPrompt = basePrompt;
@@ -96,7 +96,6 @@ fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
   let userInfo = "\n\n'''";
   userInfo += "\n[사용자 정보]";
   if (user_name) userInfo += `\n- 사용자의 이름은 "${user_name}"입니다.`;
-  if (birthdate) userInfo += `\n- 사용자의 생년월일은 "${birthdate}"입니다.`;
   if (self_intro) userInfo += `\n- 사용자 소개: "${self_intro}"`;
   userInfo += "\n'''";
 
@@ -206,14 +205,14 @@ async function sendVoipPushNotification(fastifyInstance, receiverVoipToken, payl
   notification.expiry = Math.floor(Date.now() / 1000) + 3600; // 1시간 후 만료
   notification.payload = payload; // { aps: { ... }, ...customData }
   
-  fastifyInstance.log.info(`[VoIP Push Send] 전송 시도: ${notificationKeyForLog} (토큰 시작: ${receiverVoipToken.substring(0,10)}...)`);
-  fastifyInstance.log.info(`[VoIP Push Send] 알림 페이로드: ${JSON.stringify(notification.payload)}`);
+  // fastifyInstance.log.info(`[VoIP Push Send] 전송 시도: ${notificationKeyForLog} (토큰 시작: ${receiverVoipToken.substring(0,10)}...)`);
+  // fastifyInstance.log.info(`[VoIP Push Send] 알림 페이로드: ${JSON.stringify(notification.payload)}`);
 
   try {
     const result = await apnProvider.send(notification, receiverVoipToken);
     
     if (result.sent.length > 0) {
-      fastifyInstance.log.info(`[VoIP Push Send] 성공: ${notificationKeyForLog}`);
+      // fastifyInstance.log.info(`[VoIP Push Send] 성공: ${notificationKeyForLog}`);
       return { success: true, result: result.sent };
     } 
     
@@ -244,7 +243,7 @@ fastify.post('/api/v1/send-call-push', async (request, reply) => {
   }
 
   const callUUID = uuidv4(); // 통화 시도에 대한 고유 ID
-  fastify.log.info(`[send-call-push] 새 통화 요청: caller_id=${caller_id}, receiver_id=${receiver_id}, callUUID=${callUUID}`);
+  // fastify.log.info(`[send-call-push] 새 통화 요청: caller_id=${caller_id}, receiver_id=${receiver_id}, callUUID=${callUUID}`);
 
   // setTimeout 제거하고 즉시 처리
   let receiverVoipToken;
@@ -277,7 +276,7 @@ fastify.post('/api/v1/send-call-push', async (request, reply) => {
     
     // 푸시 결과 로깅 및 응답
     if (pushResult.success) {
-      fastify.log.info(`[send-call-push] 푸시 전송 성공: ${notificationKeyForLog}, callUUID=${callUUID}`);
+      // fastify.log.info(`[send-call-push] 푸시 전송 성공: ${notificationKeyForLog}, callUUID=${callUUID}`);
       return reply.send({ success: true, message: "통화 푸시가 성공적으로 전송되었습니다.", call_attempt_uuid: callUUID });
     } else {
       fastify.log.error(`[send-call-push] 푸시 전송 실패: ${notificationKeyForLog}, 오류:`, pushResult.error);

@@ -13,7 +13,6 @@ struct ProfileView: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
     @Environment(\.presentationMode) var presentationMode
     
-    @State private var showDatePicker = false
     @State private var showDiscardAlert = false
     @State private var showLogoutAlert = false
     @State private var showDeleteAccountAlert = false
@@ -55,32 +54,6 @@ struct ProfileView: View {
                                 RoundedRectangle(cornerRadius: 14)
                                     .stroke(Color.gray, lineWidth: 1)
                             )
-                    }
-                    
-                    // 생년월일 선택
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("생년월일")
-                            .font(.system(size: 16, weight: .medium))
-                        
-                        Button(action: {
-                            showDatePicker = true
-                        }) {
-                            HStack {
-                                Text(userViewModel.formattedBirthdate)
-                                    .font(.system(size: 16))
-                                    .foregroundColor(AppTheme.Colors.text)
-                                
-                                Spacer()
-                            }
-                            .padding(.horizontal, 20)
-                            .frame(height: 50)
-                            .background(Color.white)
-                            .cornerRadius(14)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .stroke(Color.gray, lineWidth: 1)
-                            )
-                        }
                     }
                     
                     // 나의 이야기 입력
@@ -157,13 +130,6 @@ struct ProfileView: View {
         }
         .background(Color.white.edgesIgnoringSafeArea(.all))
         .navigationBarHidden(true)
-        // 날짜 선택 모달
-        .sheet(isPresented: $showDatePicker) {
-            DatePickerSheet(
-                selectedDate: userViewModel.birthdateBinding,
-                isPresented: $showDatePicker
-            )
-        }
         // 변경 사항 버리기 경고
         .alert("주의", isPresented: $showDiscardAlert) {
             Button("취소", role: .cancel) { }
@@ -210,40 +176,5 @@ struct ProfileView: View {
         // .onAppear {
         //     userViewModel.fetchUserData()
         // }
-    }
-}
-
-// 날짜 선택 시트
-struct DatePickerSheet: View {
-    @Binding var selectedDate: Date
-    @Binding var isPresented: Bool
-    
-    var body: some View {
-        VStack {
-            // 날짜 선택기
-            DatePicker(
-                "",
-                selection: $selectedDate,
-                displayedComponents: .date
-            )
-            .datePickerStyle(WheelDatePickerStyle())
-            .labelsHidden()
-            
-            // 확인 버튼
-            Button(action: {
-                isPresented = false
-            }) {
-                Text("확인")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(AppTheme.Colors.primary)
-                    .cornerRadius(999)
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
-        }
-        .padding(.top, 20)
     }
 }

@@ -3,58 +3,42 @@ import Supabase
 
 class ProfileViewModel: ObservableObject {
     @Published var name: String = ""
-    @Published var birthdate: Date = Date()
     @Published var selfStory: String = ""
     
     let maxLength = 2000
     private var originalName: String = ""
-    private var originalBirthdate: Date = Date()
     private var originalSelfStory: String = ""
     
     var isModified: Bool {
         return name != originalName ||
-               !Calendar.current.isDate(birthdate, inSameDayAs: originalBirthdate) ||
                selfStory != originalSelfStory
     }
     
-    var formattedBirthdate: String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .long
-        formatter.locale = Locale(identifier: "ko_KR")
-        return formatter.string(from: birthdate)
-    }
     
     func loadUserData() {
         // 실제 앱에서는 UserDefaults, CoreData, 또는 API에서 데이터를 가져옴
         // 예시 데이터
         name = UserDefaults.standard.string(forKey: "userName") ?? ""
-        if let savedDate = UserDefaults.standard.object(forKey: "userBirthdate") as? Date {
-            birthdate = savedDate
-        }
         selfStory = UserDefaults.standard.string(forKey: "userSelfStory") ?? ""
         
         // 원본 데이터 저장
         originalName = name
-        originalBirthdate = birthdate
         originalSelfStory = selfStory
     }
     
     func saveProfile() {
         // 실제 앱에서는 UserDefaults, CoreData, 또는 API에 데이터를 저장
         UserDefaults.standard.set(name, forKey: "userName")
-        UserDefaults.standard.set(birthdate, forKey: "userBirthdate")
         UserDefaults.standard.set(selfStory, forKey: "userSelfStory")
         
         // 원본 데이터 업데이트
         originalName = name
-        originalBirthdate = birthdate
         originalSelfStory = selfStory
     }
     
     func logout(authViewModel: AuthViewModel) {
         // UserDefaults에서 사용자 데이터 삭제
         UserDefaults.standard.removeObject(forKey: "userName")
-        UserDefaults.standard.removeObject(forKey: "userBirthdate")
         UserDefaults.standard.removeObject(forKey: "userSelfStory")
         
         // AuthViewModel을 통해 로그아웃 수행
@@ -64,7 +48,6 @@ class ProfileViewModel: ObservableObject {
     func deleteAccount(authViewModel: AuthViewModel) {
         // 사용자 데이터 삭제
         UserDefaults.standard.removeObject(forKey: "userName")
-        UserDefaults.standard.removeObject(forKey: "userBirthdate")
         UserDefaults.standard.removeObject(forKey: "userSelfStory")
         
         // 계정 삭제 작업 수행 - 서버 API 사용

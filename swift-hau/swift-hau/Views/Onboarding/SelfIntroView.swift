@@ -29,7 +29,7 @@ struct SelfIntroView: View {
     var body: some View {
         VStack(spacing: 0) {
             // 헤더
-            HeaderView(onPress: { dismiss() })
+            HeaderView(onPress: { onBack() })
             
             // 콘텐츠
             ScrollView {

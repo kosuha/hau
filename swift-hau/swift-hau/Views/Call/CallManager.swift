@@ -63,6 +63,11 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
             return
         }
         
+        // 이미 uuid가 설정되어 있다면 초기화
+        if self.uuid != nil {
+            self.uuid = nil
+        }
+        
         self.uuid = uuid
         isCallInProgress = true  // 통화 알림 진행 중으로 상태 설정
         
@@ -103,6 +108,7 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
                     self.shouldShowCallScreen = false
                     self.isCallActive = false
                     self.isCallInProgress = false
+                    self.uuid = nil // UUID 초기화 추가
                 }
             } else {
                 // *** 수정: shouldShowCallScreen 업데이트에 딜레이 추가 ***
@@ -113,6 +119,7 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
                 // 나머지 상태 업데이트 및 AI 연결 종료는 딜레이 없이 즉시 수행
                 self.isCallActive = false
                 self.isCallInProgress = false
+                self.uuid = nil // UUID 초기화 추가
                 
                 if RealtimeAIConnection.shared.isConnected {
                     RealtimeAIConnection.shared.disconnect()
@@ -131,6 +138,17 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     func requestCallPush() {
         // 초기 상태 설정
         self.callError = nil
+        
+        // 모든 통화 상태 초기화
+        self.isCallActive = false
+        self.shouldShowCallScreen = false
+        self.isCallInProgress = false
+        self.uuid = nil
+        
+        // AI 연결 확실히 종료
+        if RealtimeAIConnection.shared.isConnected {
+            RealtimeAIConnection.shared.disconnect()
+        }
         
         // 사용자 ID 확인
         guard let userId = currentUserId else {
@@ -319,7 +337,14 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         // 사용자가 전화를 종료했을 때 (또는 시스템에 의해 종료될 때)
-        // *** 로그 추가 ***
+        // 상태 초기화
+        isCallActive = false
+        shouldShowCallScreen = false
+        isCallInProgress = false
+        
+        // UUID 초기화
+        self.uuid = nil
+        
         action.fulfill()
     }
     
@@ -349,6 +374,9 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
         isCallActive = false
         shouldShowCallScreen = false
         isCallInProgress = false  // 상태 초기화
+        
+        // UUID 초기화
+        self.uuid = nil
     }
     
     // 오류 초기화 메서드
@@ -361,20 +389,21 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     // 통화 상태 리셋 메서드 수정
     func resetCallStatus() {
         // 통화 관련 상태 초기화 (통화 종료시에만 호출되도록)
-        if isCallActive {
-            isCallActive = false
-            shouldShowCallScreen = false
-            isCallInProgress = false
-            
-            // AI 연결 확실히 종료
-            if RealtimeAIConnection.shared.isConnected {
-                RealtimeAIConnection.shared.disconnect()
-            }
-            
-            // 다음 통화를 위해 UI 상태 정리
-            DispatchQueue.main.async {
-                NotificationCenter.default.post(name: NSNotification.Name("CleanupCallScreen"), object: nil)
-            }
+        isCallActive = false
+        shouldShowCallScreen = false
+        isCallInProgress = false
+        
+        // UUID 초기화
+        self.uuid = nil
+        
+        // AI 연결 확실히 종료
+        if RealtimeAIConnection.shared.isConnected {
+            RealtimeAIConnection.shared.disconnect()
+        }
+        
+        // 다음 통화를 위해 UI 상태 정리
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: NSNotification.Name("CleanupCallScreen"), object: nil)
         }
     }
     
