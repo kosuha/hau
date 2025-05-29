@@ -52,17 +52,17 @@ struct SelfIntroView: View {
                     // 제목 및 설명
                     VStack(alignment: .leading, spacing: 8) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("함께 나누고싶은")
+                            Text("AI 친구 하우가")
                                 .font(.system(size: 26, weight: .bold))
                                 .foregroundColor(AppTheme.Colors.dark)
                             
-                            Text("나의 이야기를 적어주세요.")
+                            Text("어떤 친구이길 원하시나요?")
                                 .font(.system(size: 26, weight: .bold))
                                 .foregroundColor(AppTheme.Colors.dark)
                         }
                         .padding(.top, 36)
                         
-                        Text("함께 더 많은 이야기를 할 수 있어요.")
+                        Text("자세하게 적어주시면 더 좋은 친구를 만들 수 있어요.")
                             .font(.system(size: 16))
                             .foregroundColor(AppTheme.Colors.secondary)
                     }
@@ -105,6 +105,11 @@ struct SelfIntroView: View {
                     Button(action: {
                         // 자기 소개 저장 (userData 직접 수정)
                         userViewModel.userData.selfIntro = text
+
+                        // 글자 수 제한 체크
+                        if text.count > maxLength {
+                            text = String(text.prefix(maxLength))
+                        }
 
                         // 온보딩 완료 및 다음 화면으로 이동
                         onNext()

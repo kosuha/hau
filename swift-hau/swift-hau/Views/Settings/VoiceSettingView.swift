@@ -6,12 +6,42 @@
 //
 
 import SwiftUI
+import AVFoundation
 
 struct VoiceSettingView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject private var userViewModel: UserViewModel
     @State private var showDiscardAlert = false
     @State private var showSaveCompleteAlert = false
+    @State private var audioPlayer: AVAudioPlayer?
+    
+    // 목소리 옵션 배열
+    private let voiceOptions = [
+        VoiceOption(id: "ash", title: "ash", description: "맑고 또렷하며 정확한 톤"),
+        VoiceOption(id: "alloy", title: "alloy", description: "중성적이고 균형 잡힌 톤"),
+        VoiceOption(id: "ballad", title: "ballad", description: "서정적이고 부드러운 톤"),
+        VoiceOption(id: "coral", title: "coral", description: "따뜻하고 친근한 톤"),
+        VoiceOption(id: "echo", title: "echo", description: "공명감이 느껴지는 깊은 톤"),
+        VoiceOption(id: "sage", title: "sage", description: "차분하고 사려 깊은 톤"),
+        VoiceOption(id: "shimmer", title: "shimmer", description: "밝고 에너지 넘치는 톤"),
+        VoiceOption(id: "verse", title: "verse", description: "다재다능하고 표현력이 풍부한 톤"),
+    ]
+    
+    // 음성 샘플 재생 함수
+    private func playVoiceSample() {
+        guard let url = Bundle.main.url(forResource: userViewModel.selectedVoice, withExtension: "wav") else {
+            print("음성 파일을 찾을 수 없습니다: \(userViewModel.selectedVoice).wav")
+            return
+        }
+        
+        do {
+            audioPlayer?.stop()
+            audioPlayer = try AVAudioPlayer(contentsOf: url)
+            audioPlayer?.play()
+        } catch {
+            print("음성 파일 재생 오류: \(error.localizedDescription)")
+        }
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -25,7 +55,12 @@ struct VoiceSettingView: View {
                         dismiss()
                     }
                 },
-                title: "목소리 설정"
+                title: "목소리 설정",
+                isRightButton: true,
+                rightButtonImage: "play.circle.fill",
+                rightButtonAction: {
+                    playVoiceSample()
+                }
             )
             
             // 콘텐츠
@@ -39,21 +74,14 @@ struct VoiceSettingView: View {
                         
                         // 목소리 옵션
                         VStack(spacing: 20) {
-                            // 남자 목소리 옵션
-                            VoiceOptionButton(
-                                title: "ash",
-                                description: "자상하고 차분한 남자 목소리",
-                                isSelected: userViewModel.selectedVoice == "ash",
-                                action: { userViewModel.selectedVoice = "ash" }
-                            )
-                            
-                            // 여자 목소리 옵션
-                            VoiceOptionButton(
-                                title: "alloy",
-                                description: "친절하고 밝은 여자 목소리",
-                                isSelected: userViewModel.selectedVoice == "alloy",
-                                action: { userViewModel.selectedVoice = "alloy" }
-                            )
+                            ForEach(voiceOptions) { option in
+                                VoiceOptionButton(
+                                    title: option.title,
+                                    description: option.description,
+                                    isSelected: userViewModel.selectedVoice == option.id,
+                                    action: { userViewModel.selectedVoice = option.id }
+                                )
+                            }
                         }
                     }
                     .padding(.horizontal, 20)
@@ -77,7 +105,7 @@ struct VoiceSettingView: View {
                         .cornerRadius(999)
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 37)
+                .padding(.bottom, 20)
             }
             .padding(.top, 16)
         }
@@ -103,6 +131,12 @@ struct VoiceSettingView: View {
     }
 }
 
+// 목소리 옵션 모델
+struct VoiceOption: Identifiable {
+    let id: String
+    let title: String
+    let description: String
+}
 // 목소리 옵션 버튼 컴포넌트
 struct VoiceOptionButton: View {
     let title: String
@@ -122,7 +156,7 @@ struct VoiceOptionButton: View {
                     .foregroundColor(isSelected ? AppTheme.Colors.dark : AppTheme.Colors.disabled)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 130)
+            .frame(height: 80)
             .padding(20)
             .background(Color.white)
             .cornerRadius(20)
@@ -133,3 +167,4 @@ struct VoiceOptionButton: View {
         }
     }
 }
+

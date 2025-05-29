@@ -27,7 +27,7 @@
 	<dict>
 		<key>NSExceptionDomains</key>
 		<dict>
-			<key>3.34.190.29</key>
+			<key>$(API_HOST)</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>
@@ -49,5 +49,15 @@
 		<string>voip</string>
 		<string>processing</string>
 	</array>
+	<key>SUPABASE_URL</key>
+	<string>$(SUPABASE_URL)</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>API_BASE_URL</key>
+	<string>$(API_BASE_URL)</string>
+	<key>DEBUG_ENABLED</key>
+	<string>$(DEBUG_ENABLED)</string>
+	<key>API_HOST</key>
+	<string>$(API_HOST)</string>
 </dict>
 </plist>

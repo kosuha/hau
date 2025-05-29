@@ -53,20 +53,20 @@ struct NameView: View {
                             .font(.system(size: 26, weight: .bold))
                             .foregroundColor(AppTheme.Colors.dark)
                         
-                        Text("이름이 어떻게 되나요?")
+                        Text("뭐라고 불러드릴까요?")
                             .font(.system(size: 26, weight: .bold))
                             .foregroundColor(AppTheme.Colors.dark)
                     }
                     .padding(.top, 36)
                     
-                    Text("적어주신 이름으로 불러드려요.")
+                    Text("적어주신 별명으로 불러드려요.")
                         .font(.system(size: 16))
                         .foregroundColor(AppTheme.Colors.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // 이름 입력 필드
-                TextField("이름 입력 (최대 12자)", text: $name)
+                TextField("별명 입력 (최대 12자)", text: $name)
                     .focused($isNameFocused)
                     .font(.system(size: 16))
                     .foregroundColor(AppTheme.Colors.dark)

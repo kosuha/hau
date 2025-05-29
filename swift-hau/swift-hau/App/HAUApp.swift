@@ -11,8 +11,36 @@ import AuthenticationServices
 import Foundation
 import UIKit
 
-let client = SupabaseClient(
-    supabaseURL: URL(string: AppConfig.supabaseProjectURL)!, supabaseKey: AppConfig.supabaseProjectKey)
+// 안전하게 Supabase 클라이언트 초기화
+let client: SupabaseClient = {
+    // 릴리즈 모드에서도 로깅하도록 함
+    print("📱 Supabase 초기화 시도")
+    print("📱 SUPABASE_URL: \(AppConfig.supabaseProjectURL ?? "nil")")
+    
+    guard let supabaseURLString = AppConfig.supabaseProjectURL, 
+          !supabaseURLString.isEmpty,
+          let supabaseURL = URL(string: supabaseURLString) else {
+        // Info.plist 값 직접 확인
+        if let infoDict = Bundle.main.infoDictionary,
+           let urlFromInfo = infoDict["SUPABASE_URL"] as? String,
+           !urlFromInfo.isEmpty,
+           let url = URL(string: urlFromInfo) {
+            print("📱 Info.plist에서 직접 URL 발견: \(urlFromInfo)")
+            let key = AppConfig.supabaseProjectKey
+            return SupabaseClient(supabaseURL: url, supabaseKey: key)
+        }
+        
+        // 마지막 대안으로 하드코딩된 값 사용
+        print("📱 Supabase 초기화 실패: 유효한 URL을 찾을 수 없습니다")
+        fatalError("Supabase 초기화 실패: 유효한 URL이 설정되지 않았습니다. Info.plist 또는 환경 변수를 확인하세요.")
+    }
+    
+    let supabaseKey = AppConfig.supabaseProjectKey
+    
+    print("📱 Supabase 초기화 성공 - URL: \(supabaseURLString)")
+    
+    return SupabaseClient(supabaseURL: supabaseURL, supabaseKey: supabaseKey)
+}()
 
 @main
 struct HAUApp: App {
@@ -122,7 +150,7 @@ struct HAUApp: App {
             let response: AppVersionResponse = queriedItems.first ?? AppVersionResponse(
                 latestVersion: currentVersion,
                 minimumVersion: currentVersion,
-                appStoreURL: "https://apps.apple.com/app/id123456789", // 실제 앱 ID로 변경 필요
+                appStoreURL: "https://apps.apple.com/app/id6746073903", // 실제 앱 ID로 변경 필요
                 updateTitle: "업데이트 안내",
                 updateMessage: "새로운 버전이 출시되었습니다."
             )

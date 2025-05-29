@@ -22,6 +22,9 @@ struct PayView: View {
                     Text("(매월 1일 초기화)")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(AppTheme.Colors.text)
+                    Text("* 현재 무료 플랜만 이용가능합니다.")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.disabled)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)

@@ -40,10 +40,10 @@ struct ProfileView: View {
                 VStack(spacing: 34) {
                     // 이름 입력
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("이름")
+                        Text("별명")
                             .font(.system(size: 16, weight: .medium))
                         
-                        TextField("이름을 입력하세요", text: userViewModel.nameBinding)
+                        TextField("별명을 입력하세요", text: userViewModel.nameBinding)
                             .focused($isNameFocused)
                             .keyboardType(.default)
                             .padding(.horizontal, 20)
@@ -58,10 +58,10 @@ struct ProfileView: View {
                     
                     // 나의 이야기 입력
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("나의 이야기")
+                        Text("지시사항")
                             .font(.system(size: 16, weight: .medium))
                         
-                        Text("나의 이야기는 통화할 때 항상 기억하고 있어요.")
+                        Text("지시사항은 AI 친구의 배경지식, 역할, 행동 방식, 대화 스타일 등을 결정합니다.")
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.Colors.secondary)
                         

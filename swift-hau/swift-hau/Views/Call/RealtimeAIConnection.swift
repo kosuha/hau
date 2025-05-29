@@ -50,9 +50,6 @@ class RealtimeAIConnection: NSObject {
     private var currentSessionCost: Double = 0.0
     private var costLimit: Double = 0.010 // 기본 비용 제한 (0.050달러)
     
-    // 서버 통신 URL
-    private let serverURL = URL(string: "https://your-api-server.com/conversations")!
-    
     // 콜 매니저 변수 추가
     private var callManager: CallManager?
     
@@ -206,7 +203,7 @@ class RealtimeAIConnection: NSObject {
     
     private func sendOffer(sdp: String, ephemeralKey: String, completion: @escaping (Bool) -> Void) {
         let baseUrl = "https://api.openai.com/v1/realtime"
-        let model = "gpt-4o-realtime-preview-2024-12-17"
+        let model = "gpt-4o-mini-realtime-preview"
         
         guard let url = URL(string: "\(baseUrl)?model=\(model)") else {
             completion(false)
@@ -281,32 +278,6 @@ class RealtimeAIConnection: NSObject {
     
     func setCostLimit(_ limit: Double) {
         costLimit = limit
-    }
-    
-    private func sendConversationsToServer() {
-        guard !conversations.isEmpty else { return }
-        
-        var request = URLRequest(url: serverURL)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        let payload: [String: Any] = [
-            "conversations": conversations,
-            "totalCost": currentSessionCost
-        ]
-        
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-            
-            URLSession.shared.dataTask(with: request) { data, response, error in
-                if let error = error {
-                    print("서버 전송 에러: \(error.localizedDescription)")
-                    return
-                }
-            }.resume()
-        } catch {
-            print("대화 내용 JSON 변환 에러: \(error.localizedDescription)")
-        }
     }
     
     private func stopConversationIfLimitReached(currentCost: Double) {
@@ -411,7 +382,9 @@ class RealtimeAIConnection: NSObject {
     // Supabase에서 사용자 포인트 업데이트 및 부족 시 통화 종료 처리
     private func updateUserPoints(pointsToDeduct: Int) async {
         guard let authId = self.currentAuthId else {
-            CallManager.shared.callError = "사용자 정보를 확인할 수 없어 포인트 차감에 실패했습니다."
+            DispatchQueue.main.async {
+                CallManager.shared.callError = "사용자 정보를 확인할 수 없어 포인트 차감에 실패했습니다."
+            }
             return
         }
 
@@ -432,7 +405,9 @@ class RealtimeAIConnection: NSObject {
                 let currentPointsResults = try JSONDecoder().decode([CurrentPointsResponse].self, from: response.data)
                 currentPointsResult = currentPointsResults.first
             } else {
-                CallManager.shared.callError = "포인트 정보를 업데이트하는 중 문제가 발생했습니다 (코드: UPU-ND)."
+                DispatchQueue.main.async {
+                    CallManager.shared.callError = "포인트 정보를 업데이트하는 중 문제가 발생했습니다 (코드: UPU-ND)."
+                }
                 disconnect()
                 if let manager = self.callManager {
                     DispatchQueue.main.async { manager.endCall() }
@@ -441,7 +416,9 @@ class RealtimeAIConnection: NSObject {
             }
 
             guard let unwrappedPointsResult = currentPointsResult else {
-                CallManager.shared.callError = "포인트 정보를 찾을 수 없어 통화가 중단되었습니다 (코드: UPU-NR)."
+                DispatchQueue.main.async {
+                    CallManager.shared.callError = "포인트 정보를 찾을 수 없어 통화가 중단되었습니다 (코드: UPU-NR)."
+                }
                 disconnect()
                 if let manager = self.callManager {
                     DispatchQueue.main.async { manager.endCall() }
@@ -454,7 +431,9 @@ class RealtimeAIConnection: NSObject {
             let newPoints = currentPoints - pointsToDeduct
 
             if newPoints < 0 {
-                CallManager.shared.callError = "무료 사용량을 모두 소진하여 통화가 중단되었습니다. 무료 사용량은 매월 1일 초기화됩니다."
+                DispatchQueue.main.async {
+                    CallManager.shared.callError = "무료 사용량을 모두 소진하여 통화가 중단되었습니다. 무료 사용량은 매월 1일 초기화됩니다."
+                }
                 
                 try await client
                     .from("user_monthly_points")
@@ -474,11 +453,15 @@ class RealtimeAIConnection: NSObject {
                     .update(["points": newPoints])
                     .eq("user_id", value: authId)
                     .execute()
-                CallManager.shared.callError = nil // 성공적인 차감 후에는 기존 오류 메시지 클리어
+                DispatchQueue.main.async {
+                    CallManager.shared.callError = nil // 성공적인 차감 후에는 기존 오류 메시지 클리어
+                }
             }
         } catch {
             print("Supabase 포인트 업데이트/조회 오류: \(error.localizedDescription)")
-            CallManager.shared.callError = "포인트 처리 중 오류가 발생하여 통화가 중단될 수 있습니다: \(error.localizedDescription)"
+            DispatchQueue.main.async {
+                CallManager.shared.callError = "포인트 처리 중 오류가 발생하여 통화가 중단될 수 있습니다: \(error.localizedDescription)"
+            }
             // 오류 발생 시에도 통화가 계속 진행되지 않도록 종료 처리하는 것이 안전할 수 있습니다.
             // disconnect()
             // if let manager = self.callManager {
@@ -560,14 +543,18 @@ class RealtimeAIConnection: NSObject {
 
             if pointsResponse == nil {
                 // MainView에서 알림을 위해 CallManager를 통해 오류 메시지 설정 가능
-                // CallManager.shared.callError = "포인트 정보를 찾을 수 없습니다. 고객센터에 문의해주세요."
+                // DispatchQueue.main.async {
+                //     CallManager.shared.callError = "포인트 정보를 찾을 수 없습니다. 고객센터에 문의해주세요."
+                // }
                 return false 
             }
 
             let currentPoints = pointsResponse!.points
 
             if currentPoints <= 0 {
-                CallManager.shared.callError = "무료 사용량을 모두 소진하셨습니다. 무료 사용량은 매월 1일 초기화됩니다."
+                DispatchQueue.main.async {
+                    CallManager.shared.callError = "무료 사용량을 모두 소진하셨습니다. 무료 사용량은 매월 1일 초기화됩니다."
+                }
                 return false
             }
             
@@ -575,7 +562,9 @@ class RealtimeAIConnection: NSObject {
 
         } catch {
             print("checkSufficientPoints 오류: 사용자 포인트를 가져오는데 실패했습니다 - \(error.localizedDescription)")
-            CallManager.shared.callError = "포인트 조회 중 오류가 발생했습니다."
+            DispatchQueue.main.async {
+                CallManager.shared.callError = "포인트 조회 중 오류가 발생했습니다."
+            }
             return false // 오류 발생 시 실패로 간주
         }
     }
