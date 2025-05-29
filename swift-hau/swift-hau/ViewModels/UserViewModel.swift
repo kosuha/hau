@@ -262,6 +262,11 @@ class UserViewModel: ObservableObject {
     func saveProfile() {
         isLoading = true
         
+        // 글자수 제한 확인
+        if let selfIntro = userData.selfIntro, selfIntro.count > maxLength {
+            userData.selfIntro = String(selfIntro.prefix(maxLength))
+        }
+        
         // 더미 저장 동작 - 로컬 상태만 즉시 업데이트
         // 원본 데이터 업데이트
         // self.originalName = self.userData.name
@@ -398,6 +403,11 @@ class UserViewModel: ObservableObject {
 
     // 프로필만 조용히 저장 (화면 이탈 방지)
     func silentlySaveProfile() {
+        // 글자수 제한 확인
+        if let selfIntro = userData.selfIntro, selfIntro.count > maxLength {
+            userData.selfIntro = String(selfIntro.prefix(maxLength))
+        }
+        
         // 서버에 조용히 저장
         guard let userId = userId else {
             print("사용자 ID가 없습니다.")

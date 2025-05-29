@@ -63,10 +63,19 @@ struct CallView: View {
                                 .foregroundColor(AppTheme.Colors.lightTransparent)
                                 .padding()
                         case .connected:
-                            Text(callDurationFormatted)
-                                .font(.system(size: 20))
-                                .foregroundColor(AppTheme.Colors.lightTransparent)
-                                .padding()
+                            HStack(spacing: 10) {
+                                // 프라이빗 모드 아이콘 표시
+                                if callManager.isPrivateMode {
+                                    Image(systemName: "lock.fill")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(AppTheme.Colors.lightTransparent)
+                                }
+
+                                Text(callDurationFormatted)
+                                    .font(.system(size: 20))
+                                    .foregroundColor(AppTheme.Colors.lightTransparent)
+                            }
+                            .padding()
                         case .disconnected:
                             Text("통화 종료")
                                 .font(.system(size: 20))
@@ -161,7 +170,8 @@ struct CallView: View {
         var callSettings: [String: Any] = [
             "language": "ko", // 사용할 언어
             "user_name": userViewModel.userData.name ?? "사용자",  // 사용자 이름
-            "history": []
+            "history": [],
+            "private_mode": callManager.isPrivateMode // 프라이빗 모드 상태 전달
         ]
         
         if let selfIntro = userViewModel.userData.selfIntro {

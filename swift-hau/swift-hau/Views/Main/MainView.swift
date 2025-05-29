@@ -18,6 +18,7 @@ struct MainView: View {
     enum Destination: Hashable {
         case settings
         case callTimeSetting
+        case privateSettings
     }
     
     var body: some View {
@@ -101,6 +102,29 @@ struct MainView: View {
                         
                         Spacer()
                         
+                        // 프라이빗 모드 상태 표시
+                        if callManager.isPrivateMode {
+                            Button(action: {
+                                navigationPath.append(Destination.privateSettings)
+                            }) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "lock.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(AppTheme.Colors.dark)
+                                    
+                                    Text("프라이빗 모드 활성화됨")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(AppTheme.Colors.dark)
+                                }
+                                .padding(.vertical, 10)
+                                .padding(.horizontal, 16)
+                                .background(AppTheme.Colors.lightTransparent)
+                                .cornerRadius(8)
+                            }
+                            .padding(.bottom, 16)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                        
                         // 통화 버튼
                         Button(action: { 
                             callManager.callError = nil // 오류 상태 초기화
@@ -152,6 +176,8 @@ struct MainView: View {
                     SettingsView()
                 case .callTimeSetting:
                     CallTimeSettingView()
+                case .privateSettings:
+                    PrivateSettingView()
                 }
             }
             .fullScreenCover(isPresented: $showCallViewAsSheet) {

@@ -13,6 +13,7 @@ struct SelfIntroView: View {
     @State private var text: String = ""
     @FocusState private var isTextFocused: Bool
     private let maxLength = 2000
+    @State private var showExceedLengthAlert = false
     var onNext: () -> Void
     var onBack: () -> Void
 
@@ -78,9 +79,9 @@ struct SelfIntroView: View {
                             .frame(minHeight: 200)
                             .padding(.bottom, 24) // 글자 수 카운터를 위한 여백
                             .onChange(of: text) { oldValue, newValue in
-                                // 최대 글자 수 제한
-                                if newValue.count > maxLength {
-                                    text = String(newValue.prefix(maxLength))
+                                // 최대 글자 수 초과 시 알림 표시
+                                if newValue.count > maxLength && oldValue.count <= maxLength {
+                                    showExceedLengthAlert = true
                                 }
                             }
                         
@@ -129,6 +130,17 @@ struct SelfIntroView: View {
         }
         .background(Color.white.edgesIgnoringSafeArea(.all))
         .navigationBarHidden(true)
+        // 글자 수 초과 알림
+        .alert("글자 수 초과", isPresented: $showExceedLengthAlert) {
+            Button("확인", role: .cancel) {
+                // 알림 확인 후 초과된 부분 자르기
+                if text.count > maxLength {
+                    text = String(text.prefix(maxLength))
+                }
+            }
+        } message: {
+            Text("지시사항이 최대 글자 수(\(maxLength)자)를 초과하여 뒷 부분을 제거합니다.")
+        }
         .onAppear {
             // 화면이 나타날 때 저장된 자기 소개 불러오기 (UserViewModel에서)
             // 이 부분은 UserViewModel의 fetchUserData가 완료된 후
@@ -142,10 +154,3 @@ struct SelfIntroView: View {
     }
 }
 
-// 미리보기
-struct SelfStoryView_Previews: PreviewProvider {
-    static var previews: some View {
-        SelfIntroView(onNext: {}, onBack: {})
-            .environmentObject(UserViewModel())
-    }
-}

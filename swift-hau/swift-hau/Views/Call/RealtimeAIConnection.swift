@@ -326,7 +326,7 @@ class RealtimeAIConnection: NSObject {
                 pointsResponse = pointsResponses.first // 첫 번째 요소 가져오기 (없으면 nil)
             } else {
                  // 데이터가 비어있으면 pointsResponse는 nil로 유지
-                 print("포인트 조회 결과 데이터가 비어있습니다. 사용자 ID: \(currentAuthUserId)")
+                 print("코인 조회 결과 데이터가 비어있습니다. 사용자 ID: \(currentAuthUserId)")
             }
 
             if pointsResponse == nil {
@@ -350,6 +350,16 @@ class RealtimeAIConnection: NSObject {
         // 포인트가 충분하면 통화 기록 생성 및 나머지 로직 진행
         conversations = [] // 대화 내용 초기화
         
+        // 프라이빗 모드인 경우 가상 ID 생성 (대화 내용 저장하지 않음)
+        if CallManager.shared.isPrivateMode {
+            currentCallId = Int64(Date().timeIntervalSince1970)
+            
+            // 통화 시작 시 인사말 전송
+            sendInitialGreeting()
+            
+            return true
+        }
+        
         do {
             // 사용자 ID는 위에서 이미 currentAuthUserId로 가져왔으므로 재사용
             let newHistory = HistoryRecord(
@@ -370,6 +380,9 @@ class RealtimeAIConnection: NSObject {
             if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
                let id = json["id"] as? Int64 {
                 currentCallId = id
+                
+                // 통화 시작 시 인사말 전송
+                sendInitialGreeting()
             }
         } catch {
             print("통화 기록 생성 오류: \(error)")
@@ -378,12 +391,55 @@ class RealtimeAIConnection: NSObject {
 
         return true // 통화 기록 생성 성공
     }
+    
+    // AI에게 인사말을 전송하는 메서드
+    private func sendInitialGreeting() {
+        // 데이터 채널이 준비될 때까지 약간 지연 후 시도
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.attemptToSendGreeting(retryCount: 5)
+        }
+    }
+    
+    // 인사말 전송 시도 (재시도 기능 포함)
+    private func attemptToSendGreeting(retryCount: Int) {
+        guard let dataChannel = self.dataChannel else {
+            print("인사말 전송 오류: 데이터 채널이 nil입니다.")
+            if retryCount > 0 {
+                DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                    self?.attemptToSendGreeting(retryCount: retryCount - 1)
+                }
+            }
+            return
+        }
+        
+        if dataChannel.readyState != .open {
+            print("인사말 전송 대기 중: 데이터 채널 상태 = \(dataChannel.readyState.rawValue)")
+            if retryCount > 0 {
+                DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                    self?.attemptToSendGreeting(retryCount: retryCount - 1)
+                }
+            }
+            return
+        }
+        
+        do {
+            // 빈 메시지 전송 없이 바로 응답 생성만 트리거
+            let responseCreate: [String: Any] = ["type": "response.create"]
+            let responseData = try JSONSerialization.data(withJSONObject: responseCreate)
+            let responseBuffer = RTCDataBuffer(data: responseData, isBinary: false)
+            dataChannel.sendData(responseBuffer)
+            
+            print("AI 응답 트리거 전송 완료")
+        } catch {
+            print("AI 응답 트리거 전송 오류: \(error.localizedDescription)")
+        }
+    }
 
     // Supabase에서 사용자 포인트 업데이트 및 부족 시 통화 종료 처리
     private func updateUserPoints(pointsToDeduct: Int) async {
         guard let authId = self.currentAuthId else {
             DispatchQueue.main.async {
-                CallManager.shared.callError = "사용자 정보를 확인할 수 없어 포인트 차감에 실패했습니다."
+                CallManager.shared.callError = "사용자 정보를 확인할 수 없어 코인 차감에 실패했습니다."
             }
             return
         }
@@ -406,7 +462,7 @@ class RealtimeAIConnection: NSObject {
                 currentPointsResult = currentPointsResults.first
             } else {
                 DispatchQueue.main.async {
-                    CallManager.shared.callError = "포인트 정보를 업데이트하는 중 문제가 발생했습니다 (코드: UPU-ND)."
+                    CallManager.shared.callError = "코인 정보를 업데이트하는 중 문제가 발생했습니다 (코드: UPU-ND)."
                 }
                 disconnect()
                 if let manager = self.callManager {
@@ -417,7 +473,7 @@ class RealtimeAIConnection: NSObject {
 
             guard let unwrappedPointsResult = currentPointsResult else {
                 DispatchQueue.main.async {
-                    CallManager.shared.callError = "포인트 정보를 찾을 수 없어 통화가 중단되었습니다 (코드: UPU-NR)."
+                    CallManager.shared.callError = "코인 정보를 찾을 수 없어 통화가 중단되었습니다 (코드: UPU-NR)."
                 }
                 disconnect()
                 if let manager = self.callManager {
@@ -432,7 +488,7 @@ class RealtimeAIConnection: NSObject {
 
             if newPoints < 0 {
                 DispatchQueue.main.async {
-                    CallManager.shared.callError = "무료 사용량을 모두 소진하여 통화가 중단되었습니다. 무료 사용량은 매월 1일 초기화됩니다."
+                    CallManager.shared.callError = "코인을 모두 소진하여 통화가 중단되었습니다."
                 }
                 
                 try await client
@@ -472,6 +528,11 @@ class RealtimeAIConnection: NSObject {
 
     // 통화 내용을 Supabase에 저장하는 메서드
     private func saveConversationToSupabase(transcript: String) {
+        // 프라이빗 모드가 활성화되어 있으면 저장하지 않음
+        if CallManager.shared.isPrivateMode {
+            return
+        }
+        
         guard let callId = currentCallId else { return }
         
         Task {
@@ -856,13 +917,13 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                 let pointsToDeduct = Int(totalCost / 0.000001)
 
                                 debugMessage = "AI: 응답 완료 - \(transcript)"
-                                // print("AI 응답: \(transcript)\n")
-                                // print("비용 내역: 오디오 입력=$\(String(format: "%.6f", audioInputCost)), 텍스트 입력=$\(String(format: "%.6f", textInputCost))")
-                                // print("         캐시된 오디오=$\(String(format: "%.6f", audioCachedCost)), 캐시된 텍스트=$\(String(format: "%.6f", textCachedCost))")
-                                // print("         오디오 출력=$\(String(format: "%.6f", audioOutputCost)), 텍스트 출력=$\(String(format: "%.6f", textOutputCost))")
-                                // print("         음성 기록=$\(String(format: "%.6f", audioCost))")
-                                // print("총 비용: $\(String(format: "%.6f", totalCost)) (차감될 포인트: \(pointsToDeduct))")
-                                // print("누적 비용: $\(String(format: "%.6f", currentSessionCost))")
+                                print("AI 응답: \(transcript)\n")
+                                print("비용 내역: 오디오 입력=$\(String(format: "%.6f", audioInputCost)), 텍스트 입력=$\(String(format: "%.6f", textInputCost))")
+                                print("         캐시된 오디오=$\(String(format: "%.6f", audioCachedCost)), 캐시된 텍스트=$\(String(format: "%.6f", textCachedCost))")
+                                print("         오디오 출력=$\(String(format: "%.6f", audioOutputCost)), 텍스트 출력=$\(String(format: "%.6f", textOutputCost))")
+                                print("         음성 기록=$\(String(format: "%.6f", audioCost))")
+                                print("총 비용: $\(String(format: "%.6f", totalCost)) (차감될 코인: \(pointsToDeduct))")
+                                print("누적 비용: $\(String(format: "%.6f", currentSessionCost))")
                                 
                                 // AI 응답 기록
                                 let aiResponse: [String: Any] = [

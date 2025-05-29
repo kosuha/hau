@@ -57,6 +57,8 @@ struct SettingsView: View {
                             SettingsItemView(title: "프로필", destination: AnyView(ProfileView()))
                             SettingsItemView(title: "통화 시간 설정", destination: AnyView(CallTimeSettingView()))
                             SettingsItemView(title: "목소리 설정", destination: AnyView(VoiceSettingView()))
+                            SettingsItemView(title: "프라이빗 모드", destination: AnyView(PrivateSettingView()))
+                            SettingsItemView(title: "대화 내역 초기화", destination: AnyView(ResetHistoryView()))
                         }
                     }
                     

@@ -11,6 +11,12 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     @Published var callScreenPresentationID = UUID()
     @Published var userViewModel: UserViewModel = UserViewModel()
     @Published var callError: String? = nil // 통화 오류 메시지 저장
+    @Published var isPrivateMode = false { // 프라이빗 모드 상태
+        didSet {
+            // 설정 값을 UserDefaults에 저장
+            UserDefaults.standard.set(isPrivateMode, forKey: "isPrivateMode")
+        }
+    }
     
     // 사용자 ID 추가
     private var currentUserId: String? = nil
@@ -39,6 +45,9 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
         provider = CXProvider(configuration: providerConfiguration)
         
         super.init()
+        
+        // UserDefaults에서 프라이빗 모드 설정 불러오기
+        isPrivateMode = UserDefaults.standard.bool(forKey: "isPrivateMode")
         
         provider.setDelegate(self, queue: nil)
     }
