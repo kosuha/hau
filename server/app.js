@@ -16,6 +16,9 @@ const deviceTokens = {};
 // APN 제공자 설정
 let apnProvider;
 
+// Gemini API 키 설정
+const geminiApiKey = process.env.GEMINI_API_KEY;
+
 // Supabase 클라이언트 초기화
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY; // service_role key 권장
@@ -63,6 +66,9 @@ function initializeAPNProvider() {
 
 // 서버 시작 시 APN 제공자 초기화
 initializeAPNProvider();
+
+// WebSocket 지원 추가
+fastify.register(require('@fastify/websocket'));
 
 // 기본 HTTP 라우터 (테스트용)
 fastify.get('/', async (request, reply) => {
@@ -554,6 +560,234 @@ fastify.delete('/api/v1/user/delete', async (request, reply) => {
       message: error.message 
     });
   }
+});
+
+// Gemini Live API WebSocket 엔드포인트
+fastify.register(async function (fastify) {
+    fastify.get('/api/v1/gemini/live', { websocket: true }, async (socket, req) => {
+        const { user_name, self_intro, voice, history, language = 'ko' } = req.query;
+        
+        fastify.log.info('Gemini Live WebSocket 연결 시작');
+        
+        // Gemini Live API WebSocket 연결 설정
+        if (!geminiApiKey) {
+            fastify.log.error('GEMINI_API_KEY 환경 변수가 설정되지 않았습니다.');
+            socket.close(1008, 'Gemini API 키가 설정되지 않았습니다.');
+            return;
+        }
+        
+        fastify.log.info(`Gemini API 키 확인됨 (길이: ${geminiApiKey.length})`);
+        
+        // 기본 프롬프트 가져오기
+        const basePrompt = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf8');
+        
+        // 사용자별 맞춤형 프롬프트 작성
+        let customPrompt = basePrompt;
+        if (user_name) {
+            customPrompt = customPrompt.replace(/상대방/g, `${user_name}님`);
+        }
+        
+        // 사용자 정보 섹션 추가
+        let userInfo = "\n\n'''";
+        userInfo += "\n[사용자 정보]";
+        if (user_name) userInfo += `\n- 사용자의 이름은 "${user_name}"입니다.`;
+        if (self_intro) userInfo += `\n- 사용자 소개: "${self_intro}"`;
+        userInfo += "\n'''";
+
+        let historyString = "";
+        if (history) {
+            const historyText = JSON.parse(history).map(record => 
+                `- ${record.created_at}: ${record.transcript || '내용 없음'}`
+            ).join("\n");
+            historyString = `\n\n[이전 통화 기록]\n${historyText}`;
+        }
+        
+        const finalPrompt = customPrompt + userInfo + historyString;
+        
+        // Gemini Live API WebSocket URL 구성
+        const geminiWsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${geminiApiKey}`;
+        
+        let geminiWs;
+        
+        try {
+            const WebSocket = require('ws');
+            geminiWs = new WebSocket(geminiWsUrl);
+            
+            geminiWs.on('open', () => {
+                fastify.log.info('Gemini Live API WebSocket 연결 성공');
+                
+                // 초기 설정 메시지 전송
+                const setupMessage = {
+                    setup: {
+                        model: "models/gemini-2.5-flash-preview-native-audio-dialog",
+                        generation_config: {
+                            response_modalities: ["AUDIO"],
+                            speech_config: {
+                                voice_config: {
+                                    prebuilt_voice_config: {
+                                        voice_name: "Aoede" // 사용자가 선택한 음성
+                                    }
+                                }
+                            }
+                        },
+                        system_instruction: {
+                            parts: [{ text: finalPrompt }]
+                        },
+                        tools: []
+                    }
+                };
+                
+                fastify.log.info('Gemini API 설정 메시지 전송 시작');
+                fastify.log.info(`설정 메시지 내용: ${JSON.stringify(setupMessage, null, 2)}`);
+                
+                try {
+                    geminiWs.send(JSON.stringify(setupMessage));
+                    fastify.log.info('Gemini API 설정 메시지 전송 완료');
+                } catch (sendError) {
+                    fastify.log.error('Gemini API 설정 메시지 전송 실패:', sendError);
+                }
+                
+                // 클라이언트에게 연결 성공 알림
+                socket.send(JSON.stringify({
+                    type: 'connection_established',
+                    message: 'Gemini Live API 연결 완료'
+                }));
+            });
+            
+            geminiWs.on('message', (data) => {
+                try {
+                    const message = JSON.parse(data.toString());
+                    
+                    // MARK: - 새로 추가: 사용자 발화 상태 감지 및 클라이언트 알림
+                    
+                    // setupComplete 체크 - 빈 응답이지만 정상적인 설정 완료 메시지
+                    if (message.setupComplete) {
+                        fastify.log.info('Gemini Live API 설정 완료');
+                        socket.send(JSON.stringify({
+                            type: 'setup_complete',
+                            message: 'Gemini Live API 설정 완료'
+                        }));
+                        return;
+                    }
+                    
+                    // 사용자 발화 시작 감지
+                    if (message.serverContent?.inputAudioBuffer?.speechStarted) {
+                        fastify.log.info('사용자 발화 시작 감지');
+                        socket.send(JSON.stringify({
+                            type: 'user_speech_started',
+                            message: '사용자 발화 시작'
+                        }));
+                    }
+                    
+                    // 사용자 발화 종료 감지
+                    if (message.serverContent?.inputAudioBuffer?.speechStopped) {
+                        fastify.log.info('사용자 발화 종료 감지');
+                        socket.send(JSON.stringify({
+                            type: 'user_speech_stopped',
+                            message: '사용자 발화 종료'
+                        }));
+                    }
+                    
+                    // 실시간 입력 시작 감지 (대안)
+                    if (message.serverContent?.realtimeInput) {
+                        // 실시간 입력이 감지되면 사용자가 말하기 시작한 것으로 간주
+                        // 이 부분은 필요에 따라 조정 가능
+                        fastify.log.debug('실시간 입력 감지 (사용자 발화 가능성)');
+                    }
+                    
+                    // Gemini API 메시지를 클라이언트로 포워딩
+                    socket.send(JSON.stringify({
+                        type: 'gemini_message',
+                        data: message
+                    }));
+                } catch (error) {
+                    fastify.log.error('Gemini 메시지 파싱 오류:', error);
+                }
+            });
+            
+            geminiWs.on('error', (error) => {
+                fastify.log.error('Gemini WebSocket 오류:', error);
+                fastify.log.error('오류 세부사항:', {
+                    message: error.message,
+                    code: error.code,
+                    stack: error.stack
+                });
+                socket.send(JSON.stringify({
+                    type: 'error',
+                    message: 'Gemini API 연결 오류'
+                }));
+            });
+            
+            geminiWs.on('close', (code, reason) => {
+                fastify.log.info(`Gemini WebSocket 연결 종료 - 코드: ${code}, 이유: ${reason.toString()}`);
+                socket.close();
+            });
+            
+        } catch (error) {
+            fastify.log.error('Gemini WebSocket 연결 실패:', error);
+            socket.close(1011, 'Gemini API 연결 실패');
+            return;
+        }
+        
+        // 클라이언트로부터 메시지 수신 처리
+        socket.on('message', (message) => {
+            try {
+                const data = JSON.parse(message.toString());
+                
+                switch (data.type) {
+                    case 'audio_data':
+                        // 오디오 데이터를 Gemini API로 전송
+                        if (geminiWs && geminiWs.readyState === WebSocket.OPEN) {
+                            const geminiMessage = {
+                                realtime_input: {
+                                    media_chunks: [{
+                                        mime_type: "audio/pcm",
+                                        data: data.audio
+                                    }]
+                                }
+                            };
+                            geminiWs.send(JSON.stringify(geminiMessage));
+                        }
+                        break;
+                        
+                    case 'end_turn':
+                        // 대화 턴 종료 신호
+                        if (geminiWs && geminiWs.readyState === WebSocket.OPEN) {
+                            geminiWs.send(JSON.stringify({
+                                client_content: {
+                                    turns: [{
+                                        role: "user",
+                                        parts: [{ text: "" }]
+                                    }],
+                                    turn_complete: true
+                                }
+                            }));
+                        }
+                        break;
+                        
+                    default:
+                        fastify.log.warn('알 수 없는 메시지 타입:', data.type);
+                }
+            } catch (error) {
+                fastify.log.error('클라이언트 메시지 처리 오류:', error);
+            }
+        });
+        
+        // 연결 종료 처리
+        socket.on('close', () => {
+            fastify.log.info('클라이언트 WebSocket 연결 종료');
+            if (geminiWs) {
+                geminiWs.close();
+            }
+        });
+        
+        socket.on('error', (error) => {
+            fastify.log.error('클라이언트 WebSocket 오류:', error);
+            if (geminiWs) {
+                geminiWs.close();
+            }
+        });
+    });
 });
 
 // 서버 시작 (포트 3000)
