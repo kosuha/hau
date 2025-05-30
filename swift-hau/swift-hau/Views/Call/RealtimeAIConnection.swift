@@ -57,21 +57,6 @@ class RealtimeAIConnection: NSObject {
     private var pendingEndCall: Bool = false
     private var pendingCallManager: CallManager? = nil
     
-    // 통화 기록 구조체
-    private struct HistoryRecord: Encodable {
-        let transcript: String
-        let summary: String
-        let auth_id: String
-    }
-    
-    // 통화 기록 응답 구조체
-    private struct HistoryResponse: Decodable {
-        let id: Int64
-        let transcript: String
-        let summary: String
-        let auth_id: String
-    }
-    
     private override init() {
         super.init()
         // 앱 시작 시 한 번만 SSL 초기화
