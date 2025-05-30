@@ -79,70 +79,69 @@ fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
   }
 
   // 기본 프롬프트 가져오기
-  const basePrompt = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf8');
+  // const basePrompt = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf8');
   
   // 클라이언트에서 보낸 사용자 정보 추출
   const { user_name, self_intro, voice, history, language = 'ko' } = request.body || {};
   
-  // 사용자 정보를 프롬프트에 추가
-  let customPrompt = basePrompt;
+  // // 사용자 정보를 프롬프트에 추가
+  // let customPrompt = basePrompt;
   
-  // 사용자별 맞춤형 프롬프트 작성
-  if (user_name) {
-    customPrompt = customPrompt.replace(/상대방/g, `${user_name}님`);
-  }
+  // // 사용자별 맞춤형 프롬프트 작성
+  // if (user_name) {
+    // }
+  const customPrompt = `대화상대의 이름은 ${user_name}입니다. [instructions]과 [history]을 참고하여 대화를 진행해주세요. [instructions]에서 따로 명시되지 않은 경우, 대화는 한국어로 진행해주세요.\n`;
   
   // 사용자 정보 섹션 추가
-  let userInfo = "\n\n'''";
-  userInfo += "\n[사용자 정보]";
-  if (user_name) userInfo += `\n- 사용자의 이름은 "${user_name}"입니다.`;
-  if (self_intro) userInfo += `\n- 사용자 소개: "${self_intro}"`;
-  userInfo += "\n'''";
+  let userInfo = "";
+  userInfo += "\n[instructions]";
+  if (self_intro) userInfo += `\n"${self_intro}"`;
+  userInfo += "\n";
 
-    let historyString = ""; // 새로운 변수 선언
-    if (history) {
-        // Supabase에서 가져온 history 배열을 문자열로 변환
-        const historyText = history.map(record => 
-            `- ${record.created_at}: ${record.transcript || '내용 없음'}`
-        ).join("\n");
-        historyString = `\n\n[이전 통화 기록]\n${historyText}`;
-    }
-    
-    // 최종 프롬프트 생성
-    const finalPrompt = customPrompt + userInfo + historyString; // 수정된 변수 사용
-    
-    // OpenAI API 엔드포인트 및 요청 데이터
-    const url = 'https://api.openai.com/v1/realtime/sessions';
-    const data = {
-        model: 'gpt-4o-mini-realtime-preview',
-        modalities: ['audio', 'text'],
-        instructions: finalPrompt,
-        // 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', and 'verse'
-        voice: voice,
-        input_audio_transcription: {
-            language: language,
-            model: 'whisper-1'
-        }
-    };
-    const headers = {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-    };
+  let historyString = ""; // 새로운 변수 선언
+  if (history) {
+      // Supabase에서 가져온 history 배열을 문자열로 변환
+      const historyText = history.map(record => 
+          `- ${record.created_at}: ${record.transcript || '내용 없음'}`
+      ).join("\n");
+      historyString = `\n\n[history]\n${historyText}`;
+  }
+  
+  // 최종 프롬프트 생성
+  const finalPrompt = customPrompt + userInfo + historyString;
+  
+  // OpenAI API 엔드포인트 및 요청 데이터
+  const url = 'https://api.openai.com/v1/realtime/sessions';
+  const data = {
+      model: 'gpt-4o-mini-realtime-preview',
+      modalities: ['audio', 'text'],
+      instructions: finalPrompt,
+      // 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', and 'verse'
+      voice: voice,
+      input_audio_transcription: {
+          language: language,
+          model: 'whisper-1'
+      }
+  };
+  const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+  };
 
-    try {
-        // OpenAI API로 POST 요청 보내기
-        const response = await axios.post(url, data, { headers });
+  try {
+      // OpenAI API로 POST 요청 보내기
+      const response = await axios.post(url, data, { headers });
 
-        // OpenAI API 응답을 클라이언트로 전달
-        reply.send(response.data);
-    } catch (error) {
-        fastify.log.error(error.response ? error.response.data : error.message); // 에러 로깅 개선
-        // 에러 응답 처리
-        reply.code(error.response ? error.response.status : 500).send({
-            error: 'OpenAI API 요청 중 오류가 발생했습니다.',
-            details: error.response ? error.response.data : error.message,
-        });
-    }
+      // OpenAI API 응답을 클라이언트로 전달
+      reply.send(response.data);
+  } catch (error) {
+      fastify.log.error(error.response ? error.response.data : error.message); // 에러 로깅 개선
+      // 에러 응답 처리
+      reply.code(error.response ? error.response.status : 500).send({
+          error: 'OpenAI API 요청 중 오류가 발생했습니다.',
+          details: error.response ? error.response.data : error.message,
+      });
+  }
 });
 
 // 토큰 등록 엔드포인트
