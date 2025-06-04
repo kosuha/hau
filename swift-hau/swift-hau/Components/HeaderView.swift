@@ -14,6 +14,7 @@ struct HeaderView: View {
     var isRightButton: Bool = false
     var rightButtonImage: String = "ellipsis"
     var rightButtonAction: (() -> Void)?
+    var color: Color = .black
     
     var body: some View {
         ZStack {
@@ -22,6 +23,7 @@ struct HeaderView: View {
                 Text(title)
                     .font(.system(size: 18, weight: .bold))
                     .frame(maxWidth: .infinity, alignment: .center)
+                    .foregroundColor(color)
             }
             
             // 양쪽 버튼 배치
@@ -31,7 +33,7 @@ struct HeaderView: View {
                     Button(action: onPress) {
                         Image(systemName: isClose ? "xmark" : "chevron.left")
                             .font(.system(size: 24))
-                            .foregroundColor(.black)
+                            .foregroundColor(color)
                     }
                 } else {
                     // 왼쪽 버튼이 없을 때 공간 유지
@@ -45,7 +47,7 @@ struct HeaderView: View {
                     Button(action: rightButtonAction ?? {}) {
                         Image(systemName: rightButtonImage)
                             .font(.system(size: 24))
-                            .foregroundColor(.black)
+                            .foregroundColor(color)
                     }
                 } else {
                     // 오른쪽 버튼이 없을 때 공간 유지

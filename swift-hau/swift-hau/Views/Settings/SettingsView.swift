@@ -22,13 +22,16 @@ struct SettingsView: View {
                     // 멤버십 정보
                     NavigationLink(destination: PayView()) {
                         HStack {
-                            Text("나의 멤버십")
+                            Image(systemName: "diamond.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(AppTheme.Colors.text)
+                            Text("나의 코인")
                                 .font(.system(size: 16))
                                 .foregroundColor(AppTheme.Colors.text)
                             
                             Spacer()
                             
-                            Text("무료")
+                            Text("1,000")
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(AppTheme.Colors.text)
                         }
@@ -36,8 +39,12 @@ struct SettingsView: View {
                         .frame(height: 78)
                         .background(AppTheme.Colors.secondaryLight)
                         .cornerRadius(16)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(AppTheme.Colors.secondary, lineWidth: 1)
+                        )
                     }
-                    
+
                     // 설정 섹션
                     VStack(spacing: 16) {
                         // 섹션 헤더
@@ -103,6 +110,7 @@ struct SettingsView: View {
                     }
                 }
                 .padding(.horizontal, 20)
+                .padding(.top, 4)
             }
         }
         .navigationBarHidden(true)
@@ -130,3 +138,10 @@ struct SettingsItemView: View {
         }
     }
 }
+
+struct SettingsView_Previews: PreviewProvider {
+    static var previews: some View {
+        SettingsView()
+    }
+}
+

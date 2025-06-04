@@ -19,6 +19,7 @@ struct MainView: View {
         case settings
         case callTimeSetting
         case privateSettings
+        case pay
     }
     
     var body: some View {
@@ -31,12 +32,30 @@ struct MainView: View {
                     // 헤더
                     HStack {
                         Spacer()
+                        
+                        Button(action: { navigationPath.append(Destination.pay) }) {
+                            Image(systemName: "diamond.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(.white)
+                            Text("1,500")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .cornerRadius(99)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 99)
+                                .stroke(AppTheme.Colors.light, lineWidth: 1.5)
+                        )
+
                         Button(action: { navigationPath.append(Destination.settings) }) {
                             Image(systemName: "gearshape.fill")
                                 .font(.system(size: 24))
                                 .foregroundColor(.white)
                         }
-                        .padding(.horizontal, 20)
+                        .padding(.leading, 10)
+                        .padding(.trailing, 20)
                     }
                     .frame(height: UIScreen.main.bounds.height * 0.1)
                     
@@ -178,6 +197,8 @@ struct MainView: View {
                     CallTimeSettingView()
                 case .privateSettings:
                     PrivateSettingView()
+                case .pay:
+                    PayView()
                 }
             }
             .fullScreenCover(isPresented: $showCallViewAsSheet) {
@@ -234,5 +255,13 @@ struct MainView: View {
                     showCallViewAsSheet = true
                 }
             }
+    }
+}
+
+struct MainView_Previews: PreviewProvider {
+    static var previews: some View {
+        MainView()
+            .environmentObject(UserViewModel())
+            .environmentObject(CallManager.shared)
     }
 }

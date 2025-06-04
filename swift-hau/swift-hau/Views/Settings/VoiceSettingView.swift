@@ -37,6 +37,7 @@ struct VoiceSettingView: View {
         do {
             audioPlayer?.stop()
             audioPlayer = try AVAudioPlayer(contentsOf: url)
+            audioPlayer?.volume = 3.0
             audioPlayer?.play()
         } catch {
             print("음성 파일 재생 오류: \(error.localizedDescription)")
