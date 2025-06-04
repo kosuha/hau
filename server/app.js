@@ -555,6 +555,399 @@ fastify.delete('/api/v1/user/delete', async (request, reply) => {
   }
 });
 
+// 코인 잔액 확인 엔드포인트
+fastify.get('/api/v1/coins/balance/:user_id', async (request, reply) => {
+  const { user_id } = request.params;
+
+  if (!user_id) {
+    return reply.code(400).send({ error: 'user_id는 필수입니다.' });
+  }
+
+  try {
+    const { data: userCoin, error } = await supabase
+      .from('user_coins')
+      .select('balance')
+      .eq('user_id', user_id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116: No rows found
+      fastify.log.error(`코인 잔액 조회 오류 (user: ${user_id}):`, error);
+      return reply.code(500).send({ error: '코인 잔액 조회 중 오류가 발생했습니다.' });
+    }
+
+    const balance = userCoin ? userCoin.balance : 0;
+    return { success: true, balance };
+
+  } catch (err) {
+    fastify.log.error(`코인 잔액 조회 중 예외 발생 (user: ${user_id}):`, err);
+    return reply.code(500).send({ error: '서버 내부 오류로 코인 잔액 조회에 실패했습니다.' });
+  }
+});
+
+// 코인 사용 (차감) 엔드포인트
+fastify.post('/api/v1/coins/use', async (request, reply) => {
+  const { user_id, amount, description } = request.body;
+
+  if (!user_id || !amount || amount <= 0) {
+    return reply.code(400).send({ error: 'user_id와 양수인 amount는 필수입니다.' });
+  }
+
+  try {
+    // 1. 현재 잔액 확인
+    const { data: userCoin, error: fetchError } = await supabase
+      .from('user_coins')
+      .select('balance')
+      .eq('user_id', user_id)
+      .single();
+
+    if (fetchError) {
+      if (fetchError.code === 'PGRST116') {
+        // 사용자 코인 레코드가 없음
+        return reply.code(400).send({ error: '코인 잔액이 부족합니다.' });
+      }
+      fastify.log.error(`코인 사용 - 잔액 조회 오류 (user: ${user_id}):`, fetchError);
+      return reply.code(500).send({ error: '코인 잔액 조회 중 오류가 발생했습니다.' });
+    }
+
+    const currentBalance = userCoin.balance;
+    if (currentBalance < amount) {
+      return reply.code(400).send({ error: '코인 잔액이 부족합니다.' });
+    }
+
+    const newBalance = currentBalance - amount;
+
+    // 2. 트랜잭션으로 잔액 업데이트 및 거래 기록 추가
+    const { error: updateError } = await supabase
+      .from('user_coins')
+      .update({ balance: newBalance })
+      .eq('user_id', user_id);
+
+    if (updateError) {
+      fastify.log.error(`코인 사용 - 잔액 업데이트 오류 (user: ${user_id}):`, updateError);
+      return reply.code(500).send({ error: '코인 차감 중 오류가 발생했습니다.' });
+    }
+
+    // 3. 거래 기록 추가
+    const { error: transactionError } = await supabase
+      .from('coin_transactions')
+      .insert({
+        user_id: user_id,
+        transaction_type: 'usage',
+        amount: -amount,
+        balance_after: newBalance,
+        description: description || `코인 사용 (${amount} 차감)`
+      });
+
+    if (transactionError) {
+      fastify.log.error(`코인 사용 - 거래 기록 오류 (user: ${user_id}):`, transactionError);
+      // 거래 기록 실패는 치명적이지 않으므로 계속 진행
+    }
+
+    return reply.send({ 
+      success: true, 
+      message: '코인이 성공적으로 차감되었습니다.',
+      balance: newBalance,
+      used_amount: amount
+    });
+
+  } catch (err) {
+    fastify.log.error(`코인 사용 중 예외 발생 (user: ${user_id}):`, err);
+    return reply.code(500).send({ error: '서버 내부 오류로 코인 사용에 실패했습니다.' });
+  }
+});
+
+// 코인 충전 엔드포인트
+fastify.post('/api/v1/coins/charge', async (request, reply) => {
+  const { user_id, amount, description } = request.body;
+
+  if (!user_id || !amount || amount <= 0) {
+    return reply.code(400).send({ error: 'user_id와 양수인 amount는 필수입니다.' });
+  }
+
+  try {
+    // 1. 현재 잔액 확인 또는 새 레코드 생성
+    const { data: userCoin, error: fetchError } = await supabase
+      .from('user_coins')
+      .select('balance')
+      .eq('user_id', user_id)
+      .single();
+
+    let currentBalance = 0;
+    let isNewUser = false;
+
+    if (fetchError) {
+      if (fetchError.code === 'PGRST116') {
+        // 새 사용자 - 레코드 생성 필요
+        isNewUser = true;
+      } else {
+        fastify.log.error(`코인 충전 - 잔액 조회 오류 (user: ${user_id}):`, fetchError);
+        return reply.code(500).send({ error: '코인 잔액 조회 중 오류가 발생했습니다.' });
+      }
+    } else {
+      currentBalance = userCoin.balance;
+    }
+
+    const newBalance = currentBalance + amount;
+
+    // 2. 잔액 업데이트 또는 새 레코드 생성
+    if (isNewUser) {
+      const { error: insertError } = await supabase
+        .from('user_coins')
+        .insert({
+          user_id: user_id,
+          balance: newBalance
+        });
+
+      if (insertError) {
+        fastify.log.error(`코인 충전 - 새 레코드 생성 오류 (user: ${user_id}):`, insertError);
+        return reply.code(500).send({ error: '코인 충전 중 오류가 발생했습니다.' });
+      }
+    } else {
+      const { error: updateError } = await supabase
+        .from('user_coins')
+        .update({ balance: newBalance })
+        .eq('user_id', user_id);
+
+      if (updateError) {
+        fastify.log.error(`코인 충전 - 잔액 업데이트 오류 (user: ${user_id}):`, updateError);
+        return reply.code(500).send({ error: '코인 충전 중 오류가 발생했습니다.' });
+      }
+    }
+
+    // 3. 거래 기록 추가
+    const { error: transactionError } = await supabase
+      .from('coin_transactions')
+      .insert({
+        user_id: user_id,
+        transaction_type: 'charge',
+        amount: amount,
+        balance_after: newBalance,
+        description: description || `코인 충전 (+${amount})`
+      });
+
+    if (transactionError) {
+      fastify.log.error(`코인 충전 - 거래 기록 오류 (user: ${user_id}):`, transactionError);
+      // 거래 기록 실패는 치명적이지 않으므로 계속 진행
+    }
+
+    return reply.send({ 
+      success: true, 
+      message: '코인이 성공적으로 충전되었습니다.',
+      balance: newBalance,
+      charged_amount: amount
+    });
+
+  } catch (err) {
+    fastify.log.error(`코인 충전 중 예외 발생 (user: ${user_id}):`, err);
+    return reply.code(500).send({ error: '서버 내부 오류로 코인 충전에 실패했습니다.' });
+  }
+});
+
+// 코인 충분 여부 확인 엔드포인트
+fastify.post('/api/v1/coins/check-sufficient', async (request, reply) => {
+  const { user_id, required_amount } = request.body;
+
+  if (!user_id || !required_amount || required_amount <= 0) {
+    return reply.code(400).send({ error: 'user_id와 양수인 required_amount는 필수입니다.' });
+  }
+
+  try {
+    const { data: userCoin, error } = await supabase
+      .from('user_coins')
+      .select('balance')
+      .eq('user_id', user_id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      fastify.log.error(`코인 충분성 확인 오류 (user: ${user_id}):`, error);
+      return reply.code(500).send({ error: '코인 잔액 확인 중 오류가 발생했습니다.' });
+    }
+
+    const balance = userCoin ? userCoin.balance : 0;
+    const isSufficient = balance >= required_amount;
+
+    return reply.send({ 
+      success: true, 
+      is_sufficient: isSufficient,
+      current_balance: balance,
+      required_amount: required_amount,
+      shortage: isSufficient ? 0 : required_amount - balance
+    });
+
+  } catch (err) {
+    fastify.log.error(`코인 충분성 확인 중 예외 발생 (user: ${user_id}):`, err);
+    return reply.code(500).send({ error: '서버 내부 오류로 코인 확인에 실패했습니다.' });
+  }
+});
+
+// 통화 시작 엔드포인트 (거래 기록 생성)
+fastify.post('/api/v1/coins/call/start', async (request, reply) => {
+  const { user_id, description } = request.body;
+
+  if (!user_id) {
+    return reply.code(400).send({ error: 'user_id는 필수입니다.' });
+  }
+
+  try {
+    // 현재 잔액 확인
+    const { data: userCoin, error: fetchError } = await supabase
+      .from('user_coins')
+      .select('balance')
+      .eq('user_id', user_id)
+      .single();
+
+    if (fetchError) {
+      if (fetchError.code === 'PGRST116') {
+        return reply.code(400).send({ error: '코인 잔액이 부족합니다.' });
+      }
+      fastify.log.error(`통화 시작 - 잔액 조회 오류 (user: ${user_id}):`, fetchError);
+      return reply.code(500).send({ error: '코인 잔액 조회 중 오류가 발생했습니다.' });
+    }
+
+    const currentBalance = userCoin.balance;
+    const firstMinuteCost = 10; // 첫 번째 분 비용
+    
+    if (currentBalance < firstMinuteCost) {
+      return reply.code(400).send({ error: '코인 잔액이 부족합니다.' });
+    }
+
+    const newBalance = currentBalance - firstMinuteCost;
+
+    // 잔액 업데이트 (첫 번째 분 코인 차감)
+    const { error: updateError } = await supabase
+      .from('user_coins')
+      .update({ balance: newBalance })
+      .eq('user_id', user_id);
+
+    if (updateError) {
+      fastify.log.error(`통화 시작 - 잔액 업데이트 오류 (user: ${user_id}):`, updateError);
+      return reply.code(500).send({ error: '코인 차감 중 오류가 발생했습니다.' });
+    }
+
+    // 통화 거래 기록 생성 (첫 번째 분 비용으로 시작)
+    const { data: transaction, error: transactionError } = await supabase
+      .from('coin_transactions')
+      .insert({
+        user_id: user_id,
+        transaction_type: 'usage',
+        amount: -firstMinuteCost,
+        balance_after: newBalance,
+        description: description || '통화 1분 (10 코인 사용)'
+      })
+      .select()
+      .single();
+
+    if (transactionError) {
+      fastify.log.error(`통화 시작 - 거래 기록 생성 오류 (user: ${user_id}):`, transactionError);
+      return reply.code(500).send({ error: '통화 시작 중 오류가 발생했습니다.' });
+    }
+
+    return reply.send({ 
+      success: true, 
+      message: '통화가 시작되었습니다.',
+      transaction_id: transaction.id,
+      current_balance: newBalance,
+      initial_cost: firstMinuteCost
+    });
+
+  } catch (err) {
+    fastify.log.error(`통화 시작 중 예외 발생 (user: ${user_id}):`, err);
+    return reply.code(500).send({ error: '서버 내부 오류로 통화 시작에 실패했습니다.' });
+  }
+});
+
+// 통화 중 코인 차감 업데이트 엔드포인트
+fastify.post('/api/v1/coins/call/update', async (request, reply) => {
+  const { user_id, transaction_id, total_amount, description } = request.body;
+
+  if (!user_id || !transaction_id || !total_amount || total_amount <= 0) {
+    return reply.code(400).send({ error: 'user_id, transaction_id, total_amount는 필수입니다.' });
+  }
+
+  try {
+    // 현재 잔액 확인
+    const { data: userCoin, error: fetchError } = await supabase
+      .from('user_coins')
+      .select('balance')
+      .eq('user_id', user_id)
+      .single();
+
+    if (fetchError || !userCoin) {
+      fastify.log.error(`통화 업데이트 - 잔액 조회 오류 (user: ${user_id}):`, fetchError);
+      return reply.code(500).send({ error: '코인 잔액 조회 중 오류가 발생했습니다.' });
+    }
+
+    // 기존 거래 기록 조회하여 이전 차감 금액 확인
+    const { data: existingTransaction, error: transactionFetchError } = await supabase
+      .from('coin_transactions')
+      .select('amount, balance_after')
+      .eq('id', transaction_id)
+      .eq('user_id', user_id)
+      .single();
+
+    if (transactionFetchError || !existingTransaction) {
+      fastify.log.error(`통화 업데이트 - 기존 거래 조회 오류 (user: ${user_id}, transaction: ${transaction_id}):`, transactionFetchError);
+      return reply.code(400).send({ error: '유효하지 않은 거래 ID입니다.' });
+    }
+
+    // 이전 차감 금액과 현재 총 차감 금액의 차이 계산
+    const previousAmount = Math.abs(existingTransaction.amount);
+    const additionalAmount = total_amount - previousAmount;
+    
+    if (additionalAmount < 0) {
+      return reply.code(400).send({ error: '총 차감 금액이 이전 금액보다 작을 수 없습니다.' });
+    }
+
+    // 현재 잔액에서 추가 차감 가능한지 확인
+    if (userCoin.balance < additionalAmount) {
+      return reply.code(400).send({ error: '코인 잔액이 부족합니다.' });
+    }
+
+    const newBalance = userCoin.balance - additionalAmount;
+
+    // 잔액 업데이트 (추가 차감 금액만큼)
+    if (additionalAmount > 0) {
+      const { error: updateError } = await supabase
+        .from('user_coins')
+        .update({ balance: newBalance })
+        .eq('user_id', user_id);
+
+      if (updateError) {
+        fastify.log.error(`통화 업데이트 - 잔액 업데이트 오류 (user: ${user_id}):`, updateError);
+        return reply.code(500).send({ error: '코인 차감 중 오류가 발생했습니다.' });
+      }
+    }
+
+    // 거래 기록 업데이트 (총 차감 금액으로)
+    const { error: transactionUpdateError } = await supabase
+      .from('coin_transactions')
+      .update({
+        amount: -total_amount,
+        balance_after: newBalance,
+        description: description || `통화 진행 중 (총 ${total_amount} 코인 사용)`
+      })
+      .eq('id', transaction_id)
+      .eq('user_id', user_id);
+
+    if (transactionUpdateError) {
+      fastify.log.error(`통화 업데이트 - 거래 기록 업데이트 오류 (user: ${user_id}):`, transactionUpdateError);
+      return reply.code(500).send({ error: '거래 기록 업데이트 중 오류가 발생했습니다.' });
+    }
+
+    return reply.send({ 
+      success: true, 
+      message: '통화 진행 상황이 업데이트되었습니다.',
+      current_balance: newBalance,
+      total_used: total_amount,
+      additional_used: additionalAmount
+    });
+
+  } catch (err) {
+    fastify.log.error(`통화 업데이트 중 예외 발생 (user: ${user_id}):`, err);
+    return reply.code(500).send({ error: '서버 내부 오류로 통화 업데이트에 실패했습니다.' });
+  }
+});
+
 // 서버 시작 (포트 3000)
 fastify.listen({ port: 3000, host: '0.0.0.0' }, (err, address) => {
   if (err) {
