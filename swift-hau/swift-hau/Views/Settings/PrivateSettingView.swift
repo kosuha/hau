@@ -20,7 +20,7 @@ struct PrivateSettingView: View {
                 onPress: {
                     dismiss()
                 },
-                title: "프라이빗 모드 설정",
+                title: "프라이빗 모드",
                 isRightButton: false
             )
             
@@ -28,66 +28,59 @@ struct PrivateSettingView: View {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(spacing: 50) {
-                        // 설명 텍스트
-                        Text("프라이빗 모드를 활성화하면 통화 내용이 저장되지 않습니다.")
-                            .font(.system(size: 16, weight: .medium))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        
                         // 프라이빗 모드 토글
                         HStack(spacing: 15) {
                             Image(systemName: callManager.isPrivateMode ? "lock.fill" : "lock.open.fill")
                                 .font(.system(size: 24))
-                                .foregroundColor(callManager.isPrivateMode ? AppTheme.Colors.accent : AppTheme.Colors.disabled)
+                                .foregroundColor(callManager.isPrivateMode ? AppTheme.Colors.secondary : AppTheme.Colors.disabled)
                                 .frame(width: 24, height: 24)
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("프라이빗 모드")
                                     .font(.system(size: 18, weight: .bold))
                                     .foregroundColor(AppTheme.Colors.dark)
-                                
-                                Text("통화 내용을 저장하지 않습니다")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.Colors.disabled)
                             }
                             
                             Spacer()
                             
                             Toggle("", isOn: $callManager.isPrivateMode)
                                 .labelsHidden()
-                                .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.accent))
+                                .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.secondary))
                         }
                         .padding(20)
                         .background(Color.white)
-                        .cornerRadius(20)
+                        .cornerRadius(16)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(callManager.isPrivateMode ? AppTheme.Colors.accent : AppTheme.Colors.disabled, lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(callManager.isPrivateMode ? AppTheme.Colors.secondary : AppTheme.Colors.disabled, lineWidth: 1)
                         )
                         
                         // 추가 설명
-                        if callManager.isPrivateMode {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "info.circle.fill")
-                                        .foregroundColor(AppTheme.Colors.accent)
-                                    Text("프라이빗 모드 활성화 상태")
-                                        .font(.system(size: 16, weight: .bold))
-                                        .foregroundColor(AppTheme.Colors.dark)
-                                }
-                                
-                                Text("• 통화 내용이 하우의 서버와 데이터베이스에 저장되지 않습니다.")
-                                    .font(.system(size: 14))
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 10) {
+                                Text("프라이빗 모드를 활성화하면 어떻게 되나요?")
+                                    .font(.system(size: 16, weight: .bold))
                                     .foregroundColor(AppTheme.Colors.dark)
-                                
-                                Text("• AI 친구가 프라이빗 모드 상태의 통화 내용을 기억하지 못합니다.")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.Colors.dark)
-                                
                             }
-                            .padding(20)
-                            .background(AppTheme.Colors.lightTransparent)
-                            .cornerRadius(16)
+                            
+                            HStack(spacing: 10) {
+                                Text("•")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(AppTheme.Colors.dark)
+                                Text("통화 내용이 하우의 서버에 저장되지 않아요.")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(AppTheme.Colors.dark)
+                            }
+                            HStack(spacing: 10) {
+                                Text("•")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(AppTheme.Colors.dark)
+                                Text("AI 친구가 프라이빗 모드 상태의 통화 내용을 기억하지 못해요.")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(AppTheme.Colors.dark)
+                            }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)

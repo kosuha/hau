@@ -160,9 +160,9 @@ struct VoiceOptionButton: View {
             .frame(height: 80)
             .padding(20)
             .background(Color.white)
-            .cornerRadius(20)
+            .cornerRadius(16)
             .overlay(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.disabled, lineWidth: 1)
             )
         }

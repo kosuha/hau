@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
+    @EnvironmentObject var coinViewModel: CoinViewModel
     
     var body: some View {
         VStack(spacing: 16) {
@@ -20,19 +21,19 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 40) {
                     // 멤버십 정보
-                    NavigationLink(destination: PayView()) {
+                    NavigationLink(destination: PayView().environmentObject(coinViewModel)) {
                         HStack {
                             Image(systemName: "diamond.circle.fill")
-                                .font(.system(size: 20))
+                                .font(.system(size: 24))
                                 .foregroundColor(AppTheme.Colors.text)
                             Text("나의 코인")
-                                .font(.system(size: 16))
+                                .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(AppTheme.Colors.text)
                             
                             Spacer()
                             
-                            Text("1,000")
-                                .font(.system(size: 16, weight: .bold))
+                            Text(coinViewModel.formattedBalance())
+                                .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(AppTheme.Colors.text)
                         }
                         .padding(.horizontal, 20)

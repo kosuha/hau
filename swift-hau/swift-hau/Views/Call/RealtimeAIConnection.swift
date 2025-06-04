@@ -35,6 +35,15 @@ class RealtimeAIConnection: NSObject {
     // 현재 통화 ID
     private var currentCallId: Int64?
     private var currentAuthId: String? // 사용자 인증 ID 저장
+    private var currentTransactionId: String? // 현재 통화의 거래 ID 저장
+    private var totalCoinsUsed: Int = 0 // 총 사용된 코인 수
+    
+    // 시간 기반 코인 차감 관련 변수들
+    private var callStartTime: Date?
+    private var coinDeductionTimer: Timer?
+    private var elapsedMinutes: Int = 0
+    private var callDurationSeconds: Int = 0  // CallView와 동기화를 위한 초 단위 카운터
+    private var isDeducting: Bool = false  // 중복 차감 방지 플래그
     
     // 오디오 관련 변수들을 클래스 본문으로 이동
     private var audioStart: Int = 0
@@ -45,10 +54,11 @@ class RealtimeAIConnection: NSObject {
     var isConnected: Bool = false
     var onStateChange: ((Bool) -> Void)?
     
-    // 대화 내용과 비용 기록
+    // 전역 연결 상태 관리 추가
+    private var isConnectionInProgress: Bool = false
+    
+    // 대화 내용 기록 (비용 추적 제거)
     private var conversations: [[String: Any]] = []
-    private var currentSessionCost: Double = 0.0
-    private var costLimit: Double = 0.010 // 기본 비용 제한 (0.050달러)
     
     // 콜 매니저 변수 추가
     private var callManager: CallManager?
@@ -72,6 +82,9 @@ class RealtimeAIConnection: NSObject {
         let auth_id: String
     }
     
+    // CoinViewModel 인스턴스 추가
+    private var coinViewModel: CoinViewModel?
+    
     private override init() {
         super.init()
         // 앱 시작 시 한 번만 SSL 초기화
@@ -87,6 +100,16 @@ class RealtimeAIConnection: NSObject {
     func initialize(with ephemeralKey: String) async -> Bool {
         // 동기화 락 사용
         connectionLock.lock()
+        
+        // 이미 연결 시도 중이면 중복 차단
+        if isConnectionInProgress {
+            print("⚠️ 이미 연결 시도 중입니다. 중복 시도를 차단합니다.")
+            connectionLock.unlock()
+            return false
+        }
+        
+        isConnectionInProgress = true
+        print("🔧 initialize 시작 - 연결 진행 상태로 설정")
         
         // 이전 연결 완전히 정리
         cleanupConnection()
@@ -114,15 +137,18 @@ class RealtimeAIConnection: NSObject {
                 
                 if success {
                     self.isConnected = true
+                    print("✅ initialize 성공 - 연결 완료")
                     // 메인 스레드에서 콜백 호출
                     DispatchQueue.main.async {
                         self.onStateChange?(true)
                     }
                 } else {
                     // 실패 시 연결 정리
+                    print("❌ initialize 실패 - 연결 정리")
                     self.cleanupConnection()
                 }
                 
+                self.isConnectionInProgress = false
                 continuation.resume(returning: success)
             }
         }
@@ -242,6 +268,22 @@ class RealtimeAIConnection: NSObject {
     // 연결만 정리 (SSL은 초기화하지 않음)
     private func cleanupConnection() {
         
+        // 통화 진행 중이 아닐 때만 타이머 정리
+        if currentTransactionId == nil {
+            print("🔍 cleanupConnection - 통화 진행 중이 아니므로 타이머 정리")
+            stopCoinDeductionTimer()
+        } else {
+            print("🔍 cleanupConnection - 통화 진행 중이므로 타이머 유지")
+        }
+        
+        // 중복 차감 방지 플래그 초기화
+        isDeducting = false
+        
+        // 통화 관련 변수는 여기서 리셋하지 않음 (WebRTC 연결과 별개의 생명주기)
+        // currentTransactionId = nil
+        // totalCoinsUsed = 0
+        print("🔍 cleanupConnection 호출 - WebRTC 연결만 정리, 통화 거래는 유지. currentTransactionId: \(currentTransactionId ?? "nil")")
+        
         if let dataChannel = self.dataChannel {
             dataChannel.close()
             self.dataChannel = nil
@@ -263,26 +305,48 @@ class RealtimeAIConnection: NSObject {
             self.peerConnection = nil
         }
         
-        isConnected = false
-        // 메인 스레드에서 콜백 호출
-        DispatchQueue.main.async {
-            self.onStateChange?(false)
+        // 연결 상태가 실제로 변경된 경우에만 콜백 호출
+        if isConnected {
+            isConnected = false
+            // 메인 스레드에서 콜백 호출
+            DispatchQueue.main.async {
+                self.onStateChange?(false)
+            }
         }
     }
     
     func disconnect() {
         connectionLock.lock()
+        
+        var shouldResetTransaction = true
+        // CallManager 인스턴스가 있고, 해당 인스턴스가 통화가 진행 중이고 화면도 보여줘야 한다고 판단하면,
+        // WebRTC 연결은 정리하되, 통화 트랜잭션 ID는 즉시 리셋하지 않습니다.
+        // 이는 CallView가 잠깐 사라졌다가 다시 나타나는 경우 등, WebRTC는 재연결되지만 통화 세션은 유지되어야 하는 상황을 위함입니다.
+        if let cm = self.callManager, cm.isCallInProgress, cm.shouldShowCallScreen {
+            print("🤔 RealtimeAIConnection.disconnect() 호출됨. CallManager가 활성 통화를 인지하고 있어 트랜잭션 ID는 즉시 리셋하지 않습니다. currentTransactionId: \(currentTransactionId ?? "nil")")
+            shouldResetTransaction = false
+        }
+
+        if shouldResetTransaction {
+            print("🔍 disconnect 호출 - 통화 관련 변수도 리셋합니다. currentTransactionId: \(currentTransactionId ?? "nil")")
+            currentTransactionId = nil
+            totalCoinsUsed = 0
+        } else {
+            print("🔍 disconnect 호출 - WebRTC는 정리하지만 CallManager의 활성 통화 상태로 인해 트랜잭션 세부 정보는 유지됩니다. currentTransactionId: \(currentTransactionId ?? "nil")")
+        }
+        
+        // cleanupConnection은 currentTransactionId 상태를 확인한 후 호출
         cleanupConnection()
+        
+        // 통화 완전 종료 시에만 타이머도 정리
+        if shouldResetTransaction {
+            stopCoinDeductionTimer()
+        }
+        
+        // isConnectionInProgress는 연결 시도 자체의 상태이므로 항상 false로 설정합니다.
+        isConnectionInProgress = false
+        
         connectionLock.unlock()
-    }
-    
-    func setCostLimit(_ limit: Double) {
-        costLimit = limit
-    }
-    
-    private func stopConversationIfLimitReached(currentCost: Double) {
-        // 1) 이미 한 번 트리거했다면 중복 방지
-        guard currentCost >= costLimit, !pendingEndCall else { return }
     }
     
     // 콜 매니저 설정 메소드 추가
@@ -294,10 +358,34 @@ class RealtimeAIConnection: NSObject {
     // 반환 타입을 Bool로 변경하여 포인트 부족 시 실패를 알림
     func startCall() async -> Bool {
         
+        print("🔍 startCall 호출됨 - currentTransactionId: \(currentTransactionId ?? "nil")")
+        
+        // 이미 통화가 진행 중인 경우 중복 시작 방지
+        if currentTransactionId != nil {
+            print("⚠️ 이미 통화가 진행 중입니다. currentTransactionId: \(currentTransactionId!)")
+            
+            // 타이머 상태 확인 및 재시작
+            if coinDeductionTimer == nil {
+                print("📍 타이머가 정리되어 있어서 코인 차감 타이머를 재시작합니다.")
+                startCoinDeductionTimer()
+            } else {
+                print("📍 타이머가 이미 실행 중입니다.")
+            }
+            
+            return true // 이미 진행 중이므로 성공으로 처리
+        }
+        
+        // 연결이 진행 중인 경우에도 중복 시작 방지
+        if isConnectionInProgress {
+            print("⚠️ 이미 연결이 진행 중입니다. 잠시 후 다시 시도하세요.")
+            return false
+        }
+        
         // currentAuthId를 startCall 시작 시점에 session으로부터 가져오도록 수정
         do {
             let session = try await client.auth.session
             self.currentAuthId = session.user.id.uuidString
+            print("🔍 사용자 인증 ID 설정됨: \(self.currentAuthId!)")
         } catch {
             print("startCall 오류: 사용자 세션 정보를 가져오는데 실패했습니다 - \(error.localizedDescription)")
             return false // 세션 정보 없으면 시작 불가
@@ -349,6 +437,66 @@ class RealtimeAIConnection: NSObject {
 
         // 포인트가 충분하면 통화 기록 생성 및 나머지 로직 진행
         conversations = [] // 대화 내용 초기화
+        totalCoinsUsed = 0 // 총 사용 코인 초기화
+        
+        // 통화 시작 API 호출하여 거래 ID 받기
+        do {
+            let apiBaseURL = AppConfig.baseURL
+            if apiBaseURL.isEmpty {
+                print("API Base URL이 설정되지 않았습니다.")
+                print("⚠️ 코인 차감 없이 통화를 진행합니다.")
+            } else {
+                let url = URL(string: "\(apiBaseURL)/coins/call/start")!
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                
+                let requestBody: [String: Any] = [
+                    "user_id": currentAuthUserId,
+                    "description": "통화 1분 미만"
+                ]
+                
+                request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+                
+                let (data, response) = try await URLSession.shared.data(for: request)
+                
+                if let httpResponse = response as? HTTPURLResponse {
+                    print("통화 시작 API 응답 상태 코드: \(httpResponse.statusCode)")
+                    if let responseString = String(data: data, encoding: .utf8) {
+                        print("통화 시작 API 응답 데이터: \(responseString)")
+                    }
+                    
+                    if httpResponse.statusCode == 200 {
+                        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                            print("JSON 파싱 성공: \(json)")
+                            if let success = json["success"] as? Bool,
+                               success,
+                               let transactionId = json["transaction_id"] as? String {
+                                currentTransactionId = transactionId
+                                print("통화 시작 API 성공: transaction_id = \(transactionId)")
+                            } else {
+                                print("통화 시작 API 응답 파싱 실패")
+                                print("success: \(json["success"] ?? "nil")")
+                                print("transaction_id: \(json["transaction_id"] ?? "nil")")
+                                print("⚠️ 코인 차감 없이 통화를 진행합니다.")
+                            }
+                        } else {
+                            print("JSON 파싱 실패")
+                            print("⚠️ 코인 차감 없이 통화를 진행합니다.")
+                        }
+                    } else {
+                        print("통화 시작 API 오류: \(httpResponse.statusCode)")
+                        print("⚠️ 코인 차감 없이 통화를 진행합니다.")
+                    }
+                }
+            }
+        } catch {
+            print("통화 시작 API 호출 오류: \(error)")
+            print("⚠️ 코인 차감 없이 통화를 진행합니다.")
+        }
+        
+        // 코인 차감 타이머 시작 (CallView 타이머와 동기화)
+        startCoinDeductionTimer()
         
         // 프라이빗 모드인 경우 가상 ID 생성 (대화 내용 저장하지 않음)
         if CallManager.shared.isPrivateMode {
@@ -435,97 +583,6 @@ class RealtimeAIConnection: NSObject {
         }
     }
 
-    // Supabase에서 사용자 포인트 업데이트 및 부족 시 통화 종료 처리
-    private func updateUserPoints(pointsToDeduct: Int) async {
-        guard let authId = self.currentAuthId else {
-            DispatchQueue.main.async {
-                CallManager.shared.callError = "사용자 정보를 확인할 수 없어 코인 차감에 실패했습니다."
-            }
-            return
-        }
-
-        guard pointsToDeduct > 0 else {
-            return
-        }
-
-        do {
-            let response = try await client
-                .from("user_monthly_points")
-                .select("points")
-                .eq("user_id", value: authId)
-                .limit(1)
-                .execute()
-
-            var currentPointsResult: CurrentPointsResponse? = nil
-            if !response.data.isEmpty {
-                let currentPointsResults = try JSONDecoder().decode([CurrentPointsResponse].self, from: response.data)
-                currentPointsResult = currentPointsResults.first
-            } else {
-                DispatchQueue.main.async {
-                    CallManager.shared.callError = "코인 정보를 업데이트하는 중 문제가 발생했습니다 (코드: UPU-ND)."
-                }
-                disconnect()
-                if let manager = self.callManager {
-                    DispatchQueue.main.async { manager.endCall() }
-                }
-                return
-            }
-
-            guard let unwrappedPointsResult = currentPointsResult else {
-                DispatchQueue.main.async {
-                    CallManager.shared.callError = "코인 정보를 찾을 수 없어 통화가 중단되었습니다 (코드: UPU-NR)."
-                }
-                disconnect()
-                if let manager = self.callManager {
-                    DispatchQueue.main.async { manager.endCall() }
-                }
-                return
-            }
-
-            let currentPoints = unwrappedPointsResult.points
-
-            let newPoints = currentPoints - pointsToDeduct
-
-            if newPoints < 0 {
-                DispatchQueue.main.async {
-                    CallManager.shared.callError = "코인을 모두 소진하여 통화가 중단되었습니다."
-                }
-                
-                try await client
-                    .from("user_monthly_points")
-                    .update(["points": 0])
-                    .eq("user_id", value: authId)
-                    .execute()
-                
-                disconnect()
-                if let manager = self.callManager {
-                    DispatchQueue.main.async {
-                        manager.endCall()
-                    }
-                }
-            } else {
-                try await client
-                    .from("user_monthly_points")
-                    .update(["points": newPoints])
-                    .eq("user_id", value: authId)
-                    .execute()
-                DispatchQueue.main.async {
-                    CallManager.shared.callError = nil // 성공적인 차감 후에는 기존 오류 메시지 클리어
-                }
-            }
-        } catch {
-            print("Supabase 포인트 업데이트/조회 오류: \(error.localizedDescription)")
-            DispatchQueue.main.async {
-                CallManager.shared.callError = "포인트 처리 중 오류가 발생하여 통화가 중단될 수 있습니다: \(error.localizedDescription)"
-            }
-            // 오류 발생 시에도 통화가 계속 진행되지 않도록 종료 처리하는 것이 안전할 수 있습니다.
-            // disconnect()
-            // if let manager = self.callManager {
-            //    DispatchQueue.main.async { manager.endCall() }
-            // }
-        }
-    }
-
     // 통화 내용을 Supabase에 저장하는 메서드
     private func saveConversationToSupabase(transcript: String) {
         // 프라이빗 모드가 활성화되어 있으면 저장하지 않음
@@ -569,64 +626,194 @@ class RealtimeAIConnection: NSObject {
         }
     }
 
-    // 포인트만 확인하는 함수
-    public func checkSufficientPoints() async -> Bool { // 접근 제어 수준을 public으로 명시하거나 생략(internal)
-        // currentAuthId 설정 (startCall과 유사하게 세션에서 가져오기)
-        do {
-            let session = try await client.auth.session
-            self.currentAuthId = session.user.id.uuidString
-        } catch {
-            print("checkSufficientPoints 오류: 사용자 세션 정보를 가져오는데 실패했습니다 - \(error.localizedDescription)")
-            // MainView에서 이 오류를 사용자에게 알릴 수 있도록 CallManager 등을 통해 오류 전달 고려
-            // callManager.callError = "사용자 정보를 확인할 수 없습니다." 
-            return false
+    // CoinViewModel 설정 메서드 추가
+    func setCoinViewModel(_ viewModel: CoinViewModel) {
+        self.coinViewModel = viewModel
+    }
+
+    // 통화용 코인 차감 메서드
+    private func deductCoinsForCall(amount: Int) async {
+        guard let authId = self.currentAuthId else {
+            print("인증 ID가 없어서 코인 차감을 건너뜁니다.")
+            return
         }
         
-        guard let currentAuthUserId = self.currentAuthId else {
-            print("checkSufficientPoints 오류: 사용자 인증 ID가 없습니다.")
-            // callManager.callError = "사용자 인증 정보를 찾을 수 없습니다."
-            return false
+        guard let transactionId = self.currentTransactionId else {
+            print("거래 ID가 없어서 코인 차감을 건너뜁니다.")
+            return
         }
-
-        do {
-            let response = try await client
-                .from("user_monthly_points")
-                .select("points")
-                .eq("user_id", value: currentAuthUserId)
-                .limit(1)
-                .execute()
-
-            var pointsResponse: CurrentPointsResponse? = nil
-            if !response.data.isEmpty {
-                let pointsResponses = try JSONDecoder().decode([CurrentPointsResponse].self, from: response.data)
-                pointsResponse = pointsResponses.first
-            }
-
-            if pointsResponse == nil {
-                // MainView에서 알림을 위해 CallManager를 통해 오류 메시지 설정 가능
-                // DispatchQueue.main.async {
-                //     CallManager.shared.callError = "포인트 정보를 찾을 수 없습니다. 고객센터에 문의해주세요."
-                // }
-                return false 
-            }
-
-            let currentPoints = pointsResponse!.points
-
-            if currentPoints <= 0 {
-                DispatchQueue.main.async {
-                    CallManager.shared.callError = "무료 사용량을 모두 소진하셨습니다. 무료 사용량은 매월 1일 초기화됩니다."
-                }
-                return false
-            }
-            
-            return true // 포인트 충분
-
-        } catch {
-            print("checkSufficientPoints 오류: 사용자 포인트를 가져오는데 실패했습니다 - \(error.localizedDescription)")
+        
+        let apiBaseURL = AppConfig.baseURL
+        if apiBaseURL.isEmpty {
+            print("API Base URL이 설정되지 않았습니다.")
             DispatchQueue.main.async {
-                CallManager.shared.callError = "포인트 조회 중 오류가 발생했습니다."
+                CallManager.shared.callError = "서버 설정 오류로 통화가 중단되었습니다."
             }
-            return false // 오류 발생 시 실패로 간주
+            return
+        }
+        
+        // 총 사용 코인 수 업데이트 (첫 번째 분 10개 + 추가 차감)
+        totalCoinsUsed += amount
+        
+        let url = URL(string: "\(apiBaseURL)/coins/call/update")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody: [String: Any] = [
+            "user_id": authId,
+            "transaction_id": transactionId,
+            "total_amount": 10 + totalCoinsUsed, // 첫 번째 분(10개) + 추가 차감
+            "description": "통화 \(elapsedMinutes + 1)분 미만"
+        ]
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 200 {
+                    // 성공적으로 코인 차감됨
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let success = json["success"] as? Bool,
+                       success {
+                        print("코인 차감 성공: 추가 \(amount)코인, 총 \(10 + totalCoinsUsed)코인")
+                        
+                        // 서버 응답에서 새로운 잔액을 받은 경우 업데이트
+                        if let currentBalance = json["current_balance"] as? Int {
+                            DispatchQueue.main.async {
+                                self.coinViewModel?.updateLocalBalance(currentBalance)
+                                print("💰 코인 잔액 업데이트: \(currentBalance)개")
+                            }
+                        } else {
+                            // 서버에서 잔액을 제공하지 않은 경우 로컬에서 차감
+                            DispatchQueue.main.async {
+                                Task {
+                                    if let success = await self.coinViewModel?.deductCoins(amount: amount, description: "통화 \(self.elapsedMinutes + 1)분 미만") {
+                                        if !success {
+                                            print("⚠️ 로컬 코인 차감 실패")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        DispatchQueue.main.async {
+                            CallManager.shared.callError = nil
+                        }
+                    }
+                } else if httpResponse.statusCode == 400 {
+                    // 코인 부족 - 통화 종료
+                    print("코인 부족으로 통화 종료")
+                    DispatchQueue.main.async {
+                        CallManager.shared.callError = "코인을 모두 소진하여 통화가 중단되었습니다."
+                    }
+                    
+                    // 즉시 통화 종료
+                    disconnect()
+                    if let manager = self.callManager {
+                        DispatchQueue.main.async {
+                            manager.endCall()
+                        }
+                    }
+                } else {
+                    // 기타 오류
+                    print("코인 차감 API 오류: \(httpResponse.statusCode)")
+                    DispatchQueue.main.async {
+                        CallManager.shared.callError = "코인 처리 중 오류가 발생했습니다."
+                    }
+                }
+            }
+        } catch {
+            print("코인 차감 API 호출 오류: \(error)")
+            DispatchQueue.main.async {
+                CallManager.shared.callError = "코인 처리 중 네트워크 오류가 발생했습니다: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    // 코인 차감 타이머 시작 (CallView 타이머와 동기화)
+    private func startCoinDeductionTimer() {
+        print("🔍 startCoinDeductionTimer 호출됨 - CallView 타이머와 동기화 모드")
+        
+        // currentTransactionId가 이미 있는 경우 (기존 통화 계속)
+        if currentTransactionId != nil && callStartTime != nil {
+            print("📍 기존 통화 계속 - 기존 시간 정보 유지")
+            print("📍 기존 경과 시간: \(callDurationSeconds)초")
+            // 기존 callStartTime과 경과 시간 정보를 유지
+        } else {
+            // 새로운 통화 시작
+            print("📍 새로운 통화 시작 - 시간 정보 초기화")
+            callStartTime = Date()
+            elapsedMinutes = 0
+            callDurationSeconds = 0
+        }
+        
+        print("📍 코인 차감은 CallView 타이머와 동기화하여 실행됩니다")
+        
+        // CallView의 타이머에 의존하므로 별도 타이머 생성하지 않음
+        coinDeductionTimer = nil // 기존 타이머가 있다면 제거
+    }
+    
+    // 코인 차감 타이머 정지
+    private func stopCoinDeductionTimer() {
+        coinDeductionTimer?.invalidate()
+        coinDeductionTimer = nil
+        callStartTime = nil
+        elapsedMinutes = 0
+        callDurationSeconds = 0
+    }
+    
+    // 실제 코인 차감 수행
+    private func performCoinDeduction() {
+        // 중복 차감 방지
+        if isDeducting {
+            print("⚠️ 코인 차감이 이미 진행 중입니다. 중복 실행을 방지합니다.")
+            return
+        }
+        
+        // 차감 시작 플래그 설정
+        isDeducting = true
+        
+        // 경과 시간을 초 단위 카운터로 계산 (CallView와 동일)
+        let currentElapsedMinutes = callDurationSeconds / 60
+        elapsedMinutes = currentElapsedMinutes
+        
+        // 차감할 코인 계산: 10분마다 2개씩 증가
+        let tenMinuteSegment = elapsedMinutes / 10
+        let coinsToDeduct = 10 + (tenMinuteSegment * 2)
+        
+        let displayMinute = elapsedMinutes + 1
+        let displaySeconds = callDurationSeconds % 60
+        print("통화 \(displayMinute)분 \(displaySeconds)초 - \(coinsToDeduct)개 코인 차감")
+        
+        // 디버깅: currentTransactionId 상태 확인
+        print("🔍 코인 차감 시점 - currentTransactionId: \(currentTransactionId ?? "nil")")
+        print("🔍 코인 차감 시점 - currentAuthId: \(currentAuthId ?? "nil")")
+        
+        // 비동기적으로 코인 차감 (이번 분에 해당하는 코인만 차감)
+        Task {
+            await deductCoinsForCall(amount: coinsToDeduct)
+            // 차감 완료 후 플래그 초기화
+            isDeducting = false
+        }
+    }
+
+    // CallView와 시간 동기화 메서드 추가
+    func syncCallDuration(seconds: Int) {
+        // CallView에서 전달받은 시간으로 동기화
+        self.callDurationSeconds = seconds
+        
+        // 코인 차감 로직 실행
+        if currentTransactionId != nil {
+            // 61초부터 매 60초마다 코인 차감 (2분 01초, 3분 01초...)
+            if self.callDurationSeconds > 60 && (self.callDurationSeconds - 1) % 60 == 0 {
+                let minutes = self.callDurationSeconds / 60
+                let seconds = self.callDurationSeconds % 60
+                print("⏰ CallView 동기화 - \(minutes)분 \(seconds)초 - 코인 차감 실행")
+                self.performCoinDeduction()
+            }
         }
     }
 }
@@ -737,10 +924,14 @@ extension RealtimeAIConnection: RTCPeerConnectionDelegate {
         }
         NotificationCenter.default.post(name: .aiAudioDebugUpdate, object: nil, userInfo: ["message": "AI: ICE 연결 상태 변경 - \(stateMessage)"])
         
-        if newState == .disconnected || newState == .failed || newState == .closed {
-            isConnected = false
-            DispatchQueue.main.async {
-                self.onStateChange?(false)
+        // ICE 연결이 완전히 실패하거나 닫힌 경우에만 연결 상태를 false로 설정
+        // disconnected는 일시적일 수 있으므로 제외
+        if newState == .failed || newState == .closed {
+            if isConnected {
+                isConnected = false
+                DispatchQueue.main.async {
+                    self.onStateChange?(false)
+                }
             }
         }
     }
@@ -819,19 +1010,29 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                 // 델타 업데이트는 너무 빈번하므로 디버그 메시지 생략
                                 break
                             case "response.done":
-                                // AI 응답 완료 시 (텍스트만 있는 경우)
                                 if let response = jsonData["response"] as? [String: Any],
                                    let output = response["output"] as? [[String: Any]],
                                    let messageContent = output.first?["content"] as? [[String: Any]],
                                    let transcript = messageContent.first?["transcript"] as? String {
+
                                     debugMessage = "AI: 응답 완료 - \(transcript)"
-                                    // ... 기존 비용 계산 및 저장 로직 ...
+                                    print("AI 응답: \(transcript)\n")
+                                    
+                                    // AI 응답 기록 (비용 계산 제거)
+                                    let aiResponse: [String: Any] = [
+                                        "role": "assistant",
+                                        "content": transcript,
+                                        "timestamp": Date().timeIntervalSince1970
+                                    ]
+                                    conversations.append(aiResponse)
+                                    
+                                    // Supabase에 저장 (AI 응답)
+                                    saveConversationToSupabase(transcript: "AI: \(transcript)")
                                 }
                             case "output_audio_buffer.started":
                                  debugMessage = "AI: 응답 오디오 재생 시작"
                             case "output_audio_buffer.stopped":
                                  debugMessage = "AI: 응답 오디오 재생 종료"
-                                 // ... 기존 종료 처리 로직 ...
                             default:
                                 // 다른 타입의 메시지는 일단 무시 (필요시 추가)
                                 break
@@ -872,90 +1073,6 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                             }
                         }
                         
-                        if let type = jsonData["type"] as? String, type == "response.done" {
-                            if let response = jsonData["response"] as? [String: Any],
-                               let output = response["output"] as? [[String: Any]],
-                               let messageContent = output.first?["content"] as? [[String: Any]],
-                               let transcript = messageContent.first?["transcript"] as? String,
-                               let usage = response["usage"] as? [String: Any],
-                               let inputTokens = usage["input_token_details"] as? [String: Any],
-                               let inputAudioTokens = inputTokens["audio_tokens"] as? Int,
-                               let inputTextTokens = inputTokens["text_tokens"] as? Int,
-                               let inputCachedTokens = inputTokens["cached_tokens_details"] as? [String: Any],
-                               let inputCachedAudioTokens = inputCachedTokens["audio_tokens"] as? Int,
-                               let inputCachedTextTokens = inputCachedTokens["text_tokens"] as? Int,
-                               let outputTokens = usage["output_token_details"] as? [String: Any],
-                               let outputAudioTokens = outputTokens["audio_tokens"] as? Int,
-                               let outputTextTokens = outputTokens["text_tokens"] as? Int {
-
-                                // 백만 토큰당 비용 (gpt-4o-mini-realtime-preview)
-                                let audioInputRate = 10.0  // $10.00 per 1M tokens
-                                let textInputRate = 0.6    // $0.60 per 1M tokens
-                                let cachedRate = 0.3       // $0.30 per 1M tokens 
-                                let audioOutputRate = 20.0 // $20.00 per 1M tokens
-                                let textOutputRate = 2.4   // $2.40 per 1M tokens
-                                
-                                let millionTokens = 1_000_000.0
-                                
-                                let audioInputCost = Double(inputAudioTokens) * audioInputRate / millionTokens
-                                let textInputCost = Double(inputTextTokens) * textInputRate / millionTokens
-                                let audioCachedCost = Double(inputCachedAudioTokens) * cachedRate / millionTokens
-                                let textCachedCost = Double(inputCachedTextTokens) * cachedRate / millionTokens
-                                let audioOutputCost = Double(outputAudioTokens) * audioOutputRate / millionTokens
-                                let textOutputCost = Double(outputTextTokens) * textOutputRate / millionTokens
-
-                                // 음성 기록 $0.0001 = 1000 ms (whisper-1)
-                                let audioDurationSeconds = Double(audioDuration) / 1000.0
-                                let audioCost = audioDurationSeconds * 0.0001
-                                
-                                let totalCost = audioInputCost + textInputCost + audioCachedCost + textCachedCost + audioOutputCost + textOutputCost + audioCost
-                                
-                                // 현재 세션 비용 누적
-                                currentSessionCost += totalCost
-                                
-                                // 비용을 포인트로 변환 (0.000001 달러당 1 포인트)
-                                let pointsToDeduct = Int(totalCost / 0.000001)
-
-                                debugMessage = "AI: 응답 완료 - \(transcript)"
-                                print("AI 응답: \(transcript)\n")
-                                print("비용 내역: 오디오 입력=$\(String(format: "%.6f", audioInputCost)), 텍스트 입력=$\(String(format: "%.6f", textInputCost))")
-                                print("         캐시된 오디오=$\(String(format: "%.6f", audioCachedCost)), 캐시된 텍스트=$\(String(format: "%.6f", textCachedCost))")
-                                print("         오디오 출력=$\(String(format: "%.6f", audioOutputCost)), 텍스트 출력=$\(String(format: "%.6f", textOutputCost))")
-                                print("         음성 기록=$\(String(format: "%.6f", audioCost))")
-                                print("총 비용: $\(String(format: "%.6f", totalCost)) (차감될 코인: \(pointsToDeduct))")
-                                print("누적 비용: $\(String(format: "%.6f", currentSessionCost))")
-                                
-                                // AI 응답 기록
-                                let aiResponse: [String: Any] = [
-                                    "role": "assistant",
-                                    "content": transcript,
-                                    "cost": totalCost,
-                                    "pointsDeducted": pointsToDeduct, // 차감된 포인트도 기록
-                                    "costDetails": [
-                                        "audioInputCost": audioInputCost,
-                                        "textInputCost": textInputCost,
-                                        "audioCachedCost": audioCachedCost,
-                                        "textCachedCost": textCachedCost,
-                                        "audioOutputCost": audioOutputCost,
-                                        "textOutputCost": textOutputCost,
-                                        "audioCost": audioCost
-                                    ],
-                                    "timestamp": Date().timeIntervalSince1970
-                                ]
-                                conversations.append(aiResponse)
-                                
-                                // Supabase에 저장 (AI 응답)
-                                saveConversationToSupabase(transcript: "AI: \(transcript)")
-
-                                // 포인트 차감 로직 호출 (비동기적으로 실행)
-                                if pointsToDeduct > 0 {
-                                    Task {
-                                        await updateUserPoints(pointsToDeduct: pointsToDeduct)
-                                    }
-                                }
-                            }
-                        }
-
                         if let type = jsonData["type"] as? String, type == "response.function_call_arguments.done" {
                             if let functionName = jsonData["name"] as? String, 
                                let callId = jsonData["call_id"] as? String {
@@ -1020,9 +1137,6 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                     pendingCallManager = nil
                                 }
                             }
-
-                            // 비용 제한 확인 및 필요시 대화 중단
-                            // stopConversationIfLimitReached(currentCost: currentSessionCost)
                         }
                     }
                 } catch {

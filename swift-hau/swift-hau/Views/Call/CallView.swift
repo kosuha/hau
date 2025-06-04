@@ -17,6 +17,8 @@ struct CallView: View {
     
     // UserViewModel 주입
     @EnvironmentObject var userViewModel: UserViewModel
+    // CoinViewModel 주입
+    @EnvironmentObject var coinViewModel: CoinViewModel
     
     // 통화 준비 상태 추적
     @State private var callState: CallState = .preparing {
@@ -38,6 +40,9 @@ struct CallView: View {
     
     // *** 추가: 버튼 비활성화 상태 ***
     @State private var isEndingCall = false
+    
+    // *** 추가: 연결 시도 중복 방지 플래그 ***
+    @State private var isConnecting = false
     
     // 통화 상태 정의
     enum CallState {
@@ -94,6 +99,10 @@ struct CallView: View {
                             // *** 수정: 버튼 비활성화 상태 설정 ***
                             isEndingCall = true
                             callState = .disconnected
+                            
+                            // AI 연결 해제
+                            disconnectAI()
+                            
                             callManager.endCall()
                         }) {
                             Image(systemName: "phone.down.fill")
@@ -108,26 +117,42 @@ struct CallView: View {
                         .foregroundColor(.white)
                         .cornerRadius(999)
                     }
-                    .id(callState)
                     .padding(40)
                 }
             }
             .navigationBarHidden(true)
             .onAppear {
-                if callManager.shouldShowCallScreen {
-                    resetCallTimer()
+                print("📱 CallView onAppear 호출됨 - shouldShowCallScreen: \(callManager.shouldShowCallScreen), isConnecting: \(isConnecting)")
+                
+                // RealtimeAIConnection에 CoinViewModel 설정
+                RealtimeAIConnection.shared.setCoinViewModel(coinViewModel)
+                
+                if callManager.shouldShowCallScreen && !isConnecting {
+                    // 초기 상태를 무조건 preparing으로 설정
                     callState = .preparing
+                    print("📱 CallView 초기 상태를 preparing으로 설정")
+                    
+                    resetCallTimer()
+                    
                     Task {
                         await connectAI()
                     }
-                } else {
+                } else if !callManager.shouldShowCallScreen {
                     // 통화가 종료되면 AI 연결도 종료 (이 경우는 거의 없을 것으로 예상)
                     disconnectAI()
                     dismiss()
                 }
             }
             .onDisappear {
-                disconnectAI()
+                print("📱 CallView onDisappear 호출됨 - shouldShowCallScreen: \(callManager.shouldShowCallScreen)")
+                
+                // shouldShowCallScreen이 false인 경우에만 실제 통화 종료로 간주하여 disconnect
+                if !callManager.shouldShowCallScreen {
+                    print("📱 CallView 실제 통화 종료 - AI 연결 해제")
+                    disconnectAI()
+                } else {
+                    print("📱 CallView 임시 사라짐 - AI 연결 유지")
+                }
             }
         }
     }
@@ -140,6 +165,9 @@ struct CallView: View {
         callTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
             callDurationSeconds += 1
             callDurationFormatted = formatTime(seconds: callDurationSeconds)
+            
+            // RealtimeAIConnection의 시간과 동기화
+            RealtimeAIConnection.shared.syncCallDuration(seconds: callDurationSeconds)
         }
     }
     
@@ -233,8 +261,38 @@ struct CallView: View {
     }
 
     private func connectAI() async {
+        // 이미 통화 중인 경우 중복 실행 방지
+        if callManager.isCallInProgress && callState == .connected {
+            print("CallView: 이미 통화가 연결되어 있어 중복 실행을 방지합니다.")
+            return
+        }
+        
+        // 연결 시도 중복 방지
+        if isConnecting {
+            print("CallView: 이미 연결 시도 중이므로 중복 실행을 방지합니다.")
+            return
+        }
+        
+        // AI 연결이 이미 되어 있는 경우 중복 방지
+        if RealtimeAIConnection.shared.isConnected {
+            print("CallView: AI가 이미 연결되어 있어 중복 실행을 방지합니다.")
+            DispatchQueue.main.async {
+                if self.callState == .preparing {
+                    self.callState = .connected
+                }
+            }
+            return
+        }
+        
+        isConnecting = true
+        defer { isConnecting = false }
+        
+        print("🚀 connectAI 시작 - 새로운 연결 시도")
         resetCallTimer()
-        callState = .preparing
+        
+        DispatchQueue.main.async {
+            self.callState = .preparing
+        }
         
         // 콜백 제거 먼저 수행 (유지)
         RealtimeAIConnection.shared.onStateChange = nil
@@ -248,13 +306,13 @@ struct CallView: View {
                 if isConnected {
                     // 연결 성공 콜백: preparing 상태일 때만 connected로 변경
                     if self.callState == .preparing {
+                        print("🔗 AI 연결 성공 - preparing → connected")
                         self.callState = .connected
                     }
                 } else {
-                    // 연결 실패/끊김 콜백: connected 상태일 때만 disconnected로 변경
-                    if self.callState == .connected {
-                        self.callState = .disconnected
-                    }
+                    // 연결 실패/끊김 콜백: 단순히 로그만 출력하고 상태는 변경하지 않음
+                    // 실제 통화 종료는 사용자가 종료 버튼을 누르거나 CallManager에서 처리
+                    print("🔗 AI 연결 상태 변경 - isConnected: false (상태 유지)")
                 }
             }
         }
@@ -280,12 +338,14 @@ struct CallView: View {
                     if initSuccess {
                         DispatchQueue.main.async {
                             if self.callState == .preparing { 
+                                print("🔗 AI 초기화 성공 - preparing → connected")
                                 self.callState = .connected
                             }
                         }
                     } else {
                         // initialize 실패
                         DispatchQueue.main.async {
+                            print("❌ AI 초기화 실패 - preparing → disconnected")
                             self.callState = .disconnected
                             self.callManager.shouldShowCallScreen = false // 화면 닫기
                             // 사용자에게 알림 (예: "AI 서버 연결에 실패했습니다.")
@@ -294,6 +354,7 @@ struct CallView: View {
                 } else {
                     // startCall이 false를 반환한 경우 (포인트 부족 등)
                     DispatchQueue.main.async {
+                        print("❌ 통화 시작 실패 - preparing → disconnected")
                         self.callState = .disconnected
                         self.callManager.shouldShowCallScreen = false // 화면 닫기
                         // 사용자에게 알림 (예: "포인트가 부족하여 통화를 시작할 수 없습니다.")
@@ -306,6 +367,7 @@ struct CallView: View {
             } else {
                 // 토큰 가져오기 실패 처리
                 DispatchQueue.main.async {
+                    print("❌ 토큰 가져오기 실패 - preparing → disconnected")
                     self.callState = .disconnected
                     self.callManager.shouldShowCallScreen = false
                 }
@@ -316,7 +378,11 @@ struct CallView: View {
     private func disconnectAI() {
         // openai webrtc 연결 해제
         RealtimeAIConnection.shared.disconnect()
-        callState = .disconnected
+        
+        DispatchQueue.main.async {
+            print("🔌 AI 연결 해제 - callState → disconnected")
+            self.callState = .disconnected
+        }
     }
 }
 

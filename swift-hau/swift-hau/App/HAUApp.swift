@@ -47,12 +47,18 @@ struct HAUApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var userViewModel = UserViewModel()
     @StateObject private var authViewModel = AuthViewModel()
+    @StateObject private var coinViewModel = CoinViewModel()
     // 앱 초기 설정(onAppear)이 시작되었는지 추적하는 상태 변수
     @State private var initialSetupStarted = false
     // 업데이트 관련 상태 변수
     @State private var showUpdateAlert = false
     @State private var updateInfo: AppUpdateInfo?
 
+    init() {
+        // Google 로그인 설정
+        // ... existing code ...
+    }
+    
     var body: some Scene {
         WindowGroup {
             ZStack {
@@ -82,6 +88,7 @@ struct HAUApp: App {
             }
             .environmentObject(userViewModel)
             .environmentObject(authViewModel)
+            .environmentObject(coinViewModel)
             .onAppear {
                 // onAppear가 여러 번 호출될 경우를 대비해 한 번만 실행되도록 함
                 guard !initialSetupStarted else { return }
@@ -97,6 +104,18 @@ struct HAUApp: App {
 
                 // 모든 초기 설정 작업 시작 후 상태 업데이트
                 initialSetupStarted = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                // 앱이 활성화될 때마다 인증 상태 확인
+                authViewModel.checkAuthStatus()
+            }
+            .onChange(of: userViewModel.userData.authId) { newUserId in
+                if let userId = newUserId {
+                    coinViewModel.setUserId(userId)
+                    Task {
+                        await coinViewModel.fetchCoinBalance()
+                    }
+                }
             }
             .alert(isPresented: $showUpdateAlert) {
                 Alert(

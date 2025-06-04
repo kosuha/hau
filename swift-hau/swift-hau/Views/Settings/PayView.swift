@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PayView: View {
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var coinViewModel: CoinViewModel
     
     var body: some View {
         VStack(spacing: 0) {
@@ -22,7 +23,7 @@ struct PayView: View {
                             
                             Spacer()
                             
-                            NavigationLink(destination: PayHistoryView()) {
+                            NavigationLink(destination: PayHistoryView().environmentObject(coinViewModel)) {
                                 Text("충전/이용 내역")
                                     .font(.system(size: 14))
                                     .foregroundColor(AppTheme.Colors.text)
@@ -30,7 +31,7 @@ struct PayView: View {
                             }
                         }
                         
-                        NavigationLink(destination: PayHistoryView()) {
+                        NavigationLink(destination: PayHistoryView().environmentObject(coinViewModel)) {
                             HStack {
                                 Image(systemName: "diamond.circle.fill")
                                     .font(.system(size: 24))
@@ -38,7 +39,7 @@ struct PayView: View {
                                 
                                 Spacer()
                                 
-                                Text("1,500")
+                                Text(coinViewModel.formattedBalance())
                                     .font(.system(size: 18, weight: .bold))
                                     .foregroundColor(AppTheme.Colors.text)
                             }
@@ -71,7 +72,15 @@ struct PayView: View {
                             HStack {
                                 Text("•")
                                     .foregroundColor(AppTheme.Colors.text)
-                                Text("통화시간 1분에 10코인이 필요해요.")
+                                Text("코인은 통화시간에 따라 소모돼요.")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(AppTheme.Colors.text)
+                            }
+                            
+                            HStack {
+                                Text("•")
+                                    .foregroundColor(AppTheme.Colors.text)
+                                Text("통화시간 10분미만은 1분에 10코인, 이후 10분마다 1분에 2코인씩 추가로 소모돼요. (10+2n코인/분)")
                                     .font(.system(size: 16))
                                     .foregroundColor(AppTheme.Colors.text)
                             }
@@ -105,6 +114,13 @@ struct PayView: View {
                                 Text("•")
                                     .foregroundColor(AppTheme.Colors.text)
                                 Text("결제 완료 후 즉시 코인이 충전됩니다.")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(AppTheme.Colors.text)
+                            }
+                            HStack(alignment: .center) {
+                                Text("•")
+                                    .foregroundColor(AppTheme.Colors.text)
+                                Text("직접 구매한 코인에 대해서만 환불이 가능합니다.")
                                     .font(.system(size: 14))
                                     .foregroundColor(AppTheme.Colors.text)
                             }
@@ -147,6 +163,14 @@ struct PayView: View {
         }
         .background(Color.white.edgesIgnoringSafeArea(.all))
         .navigationBarHidden(true)
+        .onAppear {
+            Task {
+                await coinViewModel.fetchCoinBalance()
+            }
+        }
+        .refreshable {
+            await coinViewModel.fetchCoinBalance()
+        }
     }
 }
 

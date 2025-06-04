@@ -9,6 +9,7 @@ import SwiftUI
 
 struct MainView: View {
     @EnvironmentObject var userViewModel: UserViewModel
+    @StateObject private var coinViewModel = CoinViewModel()
     @State private var navigationPath = NavigationPath()
     @ObservedObject private var callManager = CallManager.shared
     @State private var showCallViewAsSheet = false
@@ -37,7 +38,7 @@ struct MainView: View {
                             Image(systemName: "diamond.circle.fill")
                                 .font(.system(size: 20))
                                 .foregroundColor(.white)
-                            Text("1,500")
+                            Text(coinViewModel.formattedBalance())
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.white)
                         }
@@ -148,7 +149,7 @@ struct MainView: View {
                         Button(action: { 
                             callManager.callError = nil // 오류 상태 초기화
                             Task {
-                                if await RealtimeAIConnection.shared.checkSufficientPoints() {
+                                if await coinViewModel.checkSufficientCoinsForCall() {
                                     callManager.requestCallPush()
                                     // 오류 없을 때만 성공 알림 표시
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -193,18 +194,21 @@ struct MainView: View {
                 switch destination {
                 case .settings:
                     SettingsView()
+                        .environmentObject(coinViewModel)
                 case .callTimeSetting:
                     CallTimeSettingView()
                 case .privateSettings:
                     PrivateSettingView()
                 case .pay:
                     PayView()
+                        .environmentObject(coinViewModel)
                 }
             }
             .fullScreenCover(isPresented: $showCallViewAsSheet) {
                 CallView()
                     .id(callManager.callScreenPresentationID)
                     .environmentObject(userViewModel)
+                    .environmentObject(coinViewModel)
             }
             .alert("통화 요청 완료", isPresented: $showCallRequestAlert) {
                 Button("확인", role: .cancel) { }
@@ -212,11 +216,27 @@ struct MainView: View {
                 Text("곧 전화가 올거에요, 전화를 받아주세요!")
             }
             .onAppear {
+                // CoinViewModel 사용자 ID 설정
+                if let userId = userViewModel.userData.authId {
+                    coinViewModel.setUserId(userId)
+                    Task {
+                        await coinViewModel.fetchCoinBalance()
+                    }
+                }
+                
                 if callManager.shouldShowCallScreen {
                     showCallViewAsSheet = true
                 }
                 
                 setupCallScreenObserver()
+            }
+            .onChange(of: userViewModel.userData.authId) { newUserId in
+                if let userId = newUserId {
+                    coinViewModel.setUserId(userId)
+                    Task {
+                        await coinViewModel.fetchCoinBalance()
+                    }
+                }
             }
             .onChange(of: callManager.callError) { newValue in
                 print("callError 변경 감지: \(newValue ?? "nil")")

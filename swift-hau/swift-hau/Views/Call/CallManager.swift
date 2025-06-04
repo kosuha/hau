@@ -105,6 +105,14 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     // 통화 종료
     func endCall(with uuid: UUID) {
+        print("🔄 endCall 호출됨 - 현재 상태: isCallActive: \(isCallActive), shouldShowCallScreen: \(shouldShowCallScreen)")
+        
+        // 이미 통화가 종료된 상태라면 중복 처리 방지
+        if !isCallActive {
+            print("⚠️ 이미 통화가 종료된 상태입니다. 중복 처리를 방지합니다.")
+            return
+        }
+        
         let endCallAction = CXEndCallAction(call: uuid)
         let transaction = CXTransaction(action: endCallAction)
         
@@ -114,26 +122,26 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
                 print("CallManager: 통화 종료 요청 오류: \(error.localizedDescription)")
                 // 오류 발생 시에도 상태는 초기화 (메인 스레드에서)
                 DispatchQueue.main.async {
-                    self.shouldShowCallScreen = false
-                    self.isCallActive = false
-                    self.isCallInProgress = false
-                    self.uuid = nil // UUID 초기화 추가
+                    self.resetCallState()
                 }
             } else {
-                // *** 수정: shouldShowCallScreen 업데이트에 딜레이 추가 ***
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { // 0.5초 딜레이
-                    self.shouldShowCallScreen = false // 화면 전환 트리거
-                }
-                
-                // 나머지 상태 업데이트 및 AI 연결 종료는 딜레이 없이 즉시 수행
-                self.isCallActive = false
-                self.isCallInProgress = false
-                self.uuid = nil // UUID 초기화 추가
-                
-                if RealtimeAIConnection.shared.isConnected {
-                    RealtimeAIConnection.shared.disconnect()
-                }
+                print("✅ 통화 종료 요청이 성공했습니다.")
+                // 상태 초기화는 provider delegate에서 처리됨
             }
+        }
+    }
+    
+    // 통화 상태 초기화
+    private func resetCallState() {
+        print("🔄 통화 상태를 초기화합니다.")
+        shouldShowCallScreen = false
+        isCallActive = false
+        isCallInProgress = false
+        uuid = nil
+        
+        // AI 연결 종료
+        if RealtimeAIConnection.shared.isConnected {
+            RealtimeAIConnection.shared.disconnect()
         }
     }
     
@@ -332,12 +340,16 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
         // 사용자가 전화를 받았을 때
+        print("📞 사용자가 통화를 수락했습니다.")
+        print("📞 현재 상태 - isCallActive: \(isCallActive), shouldShowCallScreen: \(shouldShowCallScreen), isCallInProgress: \(isCallInProgress)")
+        
         isCallActive = true
-        shouldShowCallScreen = true
         isCallInProgress = true
         
+        // shouldShowCallScreen은 navigateToCallScreen에서만 설정
         // 메인 스레드에서 UI 업데이트 확보
         DispatchQueue.main.async {
+            print("📞 CallView 화면으로 전환합니다.")
             self.navigateToCallScreen()
         }
         
@@ -346,13 +358,12 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         // 사용자가 전화를 종료했을 때 (또는 시스템에 의해 종료될 때)
-        // 상태 초기화
-        isCallActive = false
-        shouldShowCallScreen = false
-        isCallInProgress = false
+        print("🔄 CXEndCallAction 수행됨 - 통화를 종료합니다.")
         
-        // UUID 초기화
-        self.uuid = nil
+        // 메인 스레드에서 상태 초기화
+        DispatchQueue.main.async {
+            self.resetCallState()
+        }
         
         action.fulfill()
     }
@@ -417,11 +428,17 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     }
     
     // navigateToCallScreen 메서드 수정
-    private func navigateToCallScreen() {
-        // 항상 통화 화면을 표시하도록 설정
-        shouldShowCallScreen = true
+    func navigateToCallScreen() {
+        print("🔄 navigateToCallScreen 호출 - 현재 shouldShowCallScreen: \(shouldShowCallScreen)")
         
-        // 새로운 프레젠테이션 ID 생성 (화면 갱신 트리거)
+        // 이미 true라면 중복 설정 방지
+        if shouldShowCallScreen {
+            print("⚠️ 이미 shouldShowCallScreen이 true입니다. 중복 설정을 방지합니다.")
+            return
+        }
+        
+        shouldShowCallScreen = true
+        // 새로운 프레젠테이션 ID 생성으로 화면 갱신 트리거
         callScreenPresentationID = UUID()
         
         // NotificationCenter를 통해 앱 내에서 통화 화면 전환 알림
@@ -442,16 +459,29 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
         // VoIP 푸시 알림 수신
         if type == .voIP {
-            // 페이로드에서 필요한 정보 추출
-            guard let uuidString = payload.dictionaryPayload["uuid"] as? String,
-                  let uuid = UUID(uuidString: uuidString),
-                  let handle = payload.dictionaryPayload["handle"] as? String else {
+            print("🔔 VoIP 푸시 알림 수신됨 - 현재 통화 상태: isCallInProgress=\(isCallInProgress), isCallActive=\(isCallActive)")
+            
+            // 이미 통화 중인 경우 새로운 통화 거부
+            if isCallInProgress {
+                print("CallManager: 이미 통화 중이므로 새로운 통화를 거부합니다.")
                 completion()
                 return
             }
             
+            // 페이로드에서 필요한 정보 추출
+            guard let uuidString = payload.dictionaryPayload["uuid"] as? String,
+                  let uuid = UUID(uuidString: uuidString),
+                  let handle = payload.dictionaryPayload["handle"] as? String else {
+                print("VoIP 푸시 페이로드에서 필요한 정보를 추출할 수 없습니다.")
+                completion()
+                return
+            }
+            
+            print("🔔 VoIP 푸시로 수신 전화 표시 시작 - UUID: \(uuid), Handle: \(handle)")
+            
             // 수신 전화 표시
             reportIncomingCall(uuid: uuid, handle: handle) { success in
+                print("🔔 수신 전화 표시 결과: \(success)")
                 completion()
             }
         }

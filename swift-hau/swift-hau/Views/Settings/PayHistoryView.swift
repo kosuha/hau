@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PayHistoryView: View {
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var coinViewModel: CoinViewModel
     
     var body: some View {
         VStack(spacing: 0) {
@@ -18,42 +19,46 @@ struct PayHistoryView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
-                VStack(spacing: 0) {
-                    // 충전 내역
-                    PayHistoryItemView(
-                        date: "2025.06.30",
-                        type: "충전",
-                        amount: "+315",
-                        isPositive: true
-                    )
-                    
-                    // 사용 내역들
-                    PayHistoryItemView(
-                        date: "2025.06.30", 
-                        type: "사용",
-                        amount: "-50",
-                        isPositive: false
-                    )
-                    
-                    PayHistoryItemView(
-                        date: "2025.06.30",
-                        type: "사용", 
-                        amount: "-50",
-                        isPositive: false
-                    )
-                    
-                    PayHistoryItemView(
-                        date: "2025.06.30",
-                        type: "사용",
-                        amount: "-50", 
-                        isPositive: false
-                    )
+                
+                if coinViewModel.isLoading {
+                    // 로딩 상태
+                    ProgressView()
+                        .padding(.top, 50)
+                } else if coinViewModel.transactions.isEmpty {
+                    // 거래 내역이 없는 경우
+                    VStack(spacing: 16) {
+                        Text("거래 내역이 없습니다")
+                            .font(.system(size: 16))
+                            .foregroundColor(AppTheme.Colors.disabled)
+                    }
+                    .padding(.top, 50)
+                } else {
+                    // 거래 내역 표시
+                    VStack(spacing: 0) {
+                        ForEach(coinViewModel.transactions) { transaction in
+                            PayHistoryItemView(
+                                date: coinViewModel.formattedDate(transaction.createdAt),
+                                type: coinViewModel.localizedTransactionType(transaction.transactionType),
+                                amount: coinViewModel.formattedAmount(transaction.amount, type: transaction.transactionType),
+                                isPositive: transaction.transactionType == "charge",
+                                description: transaction.description
+                            )
+                        }
+                    }
+                    .padding(.top, 10)
                 }
-                .padding(.top, 10)
+            }
+            .refreshable {
+                await coinViewModel.fetchTransactionHistory()
             }
         }
         .background(Color.white.edgesIgnoringSafeArea(.all))
         .navigationBarHidden(true)
+        .onAppear {
+            Task {
+                await coinViewModel.fetchTransactionHistory()
+            }
+        }
     }
 }
 
@@ -63,19 +68,25 @@ struct PayHistoryItemView: View {
     let type: String
     let amount: String
     let isPositive: Bool
-    
+    let description: String
+
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(date)
-                    .font(.system(size: 16))
+                    .font(.system(size: 14))
                     .foregroundColor(AppTheme.Colors.disabled)
                 
                 HStack {
-                    Text(type)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.text)
-                    
+                    VStack(alignment: .leading) {
+                        Text(type)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.text)
+                        
+                        Text(description)
+                            .font(.system(size: 14))
+                            .foregroundColor(AppTheme.Colors.disabled)
+                    }
                     Spacer()
                     
                     Text(amount)
