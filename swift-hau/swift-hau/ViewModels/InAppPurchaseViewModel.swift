@@ -77,14 +77,11 @@ class InAppPurchaseViewModel: ObservableObject {
         purchasingProductId = product.id // 현재 구매 중인 상품 설정
         errorMessage = nil
         
-        print("🛒 구매 시작: \(product.id)")
-        
         do {
             let result = try await product.purchase()
             
             switch result {
             case .success(let verification):
-                print("✅ 구매 성공 - 거래 검증 시작")
                 // 거래 검증
                 let transaction = try checkVerified(verification)
                 
@@ -95,30 +92,25 @@ class InAppPurchaseViewModel: ObservableObject {
                 await transaction.finish()
                 
                 if success {
-                    print("🎉 코인 충전 완료: \(product.id)")
                     purchasedProducts.insert(product.id)
                     purchasingProductId = nil
                     return true
                 } else {
-                    print("❌ 코인 충전 실패: \(product.id)")
                     purchasingProductId = nil
                     return false
                 }
                 
             case .userCancelled:
-                print("🚫 사용자가 구매 취소")
                 // 구매 취소는 정상적인 사용자 행동이므로 에러 메시지를 표시하지 않음
                 purchasingProductId = nil
                 return false
                 
             case .pending:
-                print("⏳ 구매 승인 대기 중")
                 errorMessage = "구매 승인을 기다리고 있습니다."
                 purchasingProductId = nil
                 return false
                 
             @unknown default:
-                print("❓ 알 수 없는 구매 결과")
                 errorMessage = "구매 처리 중 오류가 발생했습니다."
                 purchasingProductId = nil
                 return false
@@ -162,14 +154,6 @@ class InAppPurchaseViewModel: ObservableObject {
             return false
         }
         
-        // StoreKit 2 Transaction 정보 직접 사용 (영수증 파일 불필요)
-        print("🔍 StoreKit 2 Transaction 정보 사용")
-        print("🔍 사용자 ID: \(userId)")
-        print("🔍 상품 ID: \(product.id)")
-        print("🔍 거래 ID: \(transaction.id)")
-        print("🔍 구매 날짜: \(transaction.purchaseDate)")
-        print("🔍 환경: \(transaction.environment)")
-        
         // Fastify 서버의 검증 엔드포인트 호출
         let serverURL = AppConfig.baseURL.replacingOccurrences(of: "/api/v1", with: "")
         guard let url = URL(string: "\(serverURL)/api/v1/coins/verify-and-charge") else {
@@ -191,22 +175,17 @@ class InAppPurchaseViewModel: ObservableObject {
             "verification_method": "storekit2_transaction" // 검증 방식 명시
         ]
         
-        print("🔍 서버 전송 데이터: \(requestBody)")
-        
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
             
             let (data, response) = try await URLSession.shared.data(for: request)
             
             if let httpResponse = response as? HTTPURLResponse {
-                print("🔍 서버 응답 상태코드: \(httpResponse.statusCode)")
-                
                 if httpResponse.statusCode == 200 {
                     // 응답 데이터 파싱
                     if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                        let success = json["success"] as? Bool,
                        success {
-                        print("✅ StoreKit 2 Transaction 검증 성공: \(coinAmount)코인")
                         return true
                     }
                 }

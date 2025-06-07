@@ -320,10 +320,20 @@ class UserViewModel: ObservableObject {
         // 실제 로그아웃 처리
         authViewModel.signOut()
         
+        // 모든 상태 완전 초기화
+        userData = UserModel()
+        selectedVoice = "ash"
+        isLoading = false
+        errorMessage = nil
+        isOnboardingCompleted = false // 온보딩 상태 초기화
+        
+        // 원본 데이터도 초기화
+        originalName = nil
+        originalSelfStory = nil
+        originalVoice = "ash"
+        
         // 사용자 ID 초기화
         userId = nil
-        // 데이터 초기화
-        userData = UserModel()
     }
     
     // 회원탈퇴 처리
@@ -357,6 +367,21 @@ class UserViewModel: ObservableObject {
                    (200...299).contains(httpResponse.statusCode) {
                     // 성공적으로 삭제된 경우
                     await MainActor.run {
+                        // 모든 상태 완전 초기화
+                        self.userData = UserModel()
+                        self.selectedVoice = "ash"
+                        self.isLoading = false
+                        self.errorMessage = nil
+                        self.isOnboardingCompleted = false // 온보딩 상태 초기화
+                        
+                        // 원본 데이터도 초기화
+                        self.originalName = nil
+                        self.originalSelfStory = nil
+                        self.originalVoice = "ash"
+                        
+                        // 사용자 ID 초기화
+                        self.userId = nil
+                        
                         // 로그아웃 처리
                         authViewModel.signOut()
                     }
@@ -369,6 +394,21 @@ class UserViewModel: ObservableObject {
                 print("계정 삭제 오류: \(error.localizedDescription)")
                 // 오류 발생 시에도 로그아웃 처리
                 await MainActor.run {
+                    // 모든 상태 완전 초기화 (오류 발생 시에도)
+                    self.userData = UserModel()
+                    self.selectedVoice = "ash"
+                    self.isLoading = false
+                    self.errorMessage = nil
+                    self.isOnboardingCompleted = false // 온보딩 상태 초기화
+                    
+                    // 원본 데이터도 초기화
+                    self.originalName = nil
+                    self.originalSelfStory = nil
+                    self.originalVoice = "ash"
+                    
+                    // 사용자 ID 초기화
+                    self.userId = nil
+                    
                     authViewModel.signOut()
                 }
             }
