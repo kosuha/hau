@@ -24,8 +24,6 @@ struct ResetHistoryView: View {
             let session = try await client.auth.session
             let authId = session.user.id.uuidString.lowercased()
             
-            print("삭제 시도 - authId: \(authId)")
-            
             // 먼저 데이터가 존재하는지 확인
             let checkResponse = try await client
                 .from("history")
@@ -33,7 +31,6 @@ struct ResetHistoryView: View {
                 .eq("auth_id", value: authId)
                 .execute()
                 
-            print("확인 결과: \(String(data: checkResponse.data, encoding: .utf8) ?? "없음")")
             
             // history 테이블에서 해당 사용자의 모든 대화 내역 삭제
             let deleteResponse = try await client
@@ -42,7 +39,6 @@ struct ResetHistoryView: View {
                 .eq("auth_id", value: authId)
                 .execute()
                 
-            print("삭제 응답: \(String(data: deleteResponse.data, encoding: .utf8) ?? "없음")")
 
             return true
         } catch {

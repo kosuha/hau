@@ -26,6 +26,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const recentNotifications = new Map(); 
 let upcomingNotificationsToSend = []; // 5분 스케줄러가 다음 5분간 보낼 알림들을 임시 저장
 
+// Rate limiting을 위한 임시 저장소 (실제 환경에서는 Redis 사용 권장)
+const purchaseAttempts = new Map();
+
 // APN 제공자 초기화 함수
 function initializeAPNProvider() {
   try {
@@ -656,20 +659,445 @@ fastify.post('/api/v1/coins/use', async (request, reply) => {
   }
 });
 
-// 코인 충전 엔드포인트
-fastify.post('/api/v1/coins/charge', async (request, reply) => {
-  const { user_id, amount, description } = request.body;
+// StoreKit 2 Transaction 기반 코인 충전 엔드포인트
+fastify.post('/api/v1/coins/verify-and-charge', async (request, reply) => {
+  const { user_id, product_id, transaction_id, purchase_date, environment, verification_method } = request.body;
 
-  if (!user_id || !amount || amount <= 0) {
-    return reply.code(400).send({ error: 'user_id와 양수인 amount는 필수입니다.' });
+  if (!user_id || !product_id || !transaction_id) {
+    return reply.code(400).send({ 
+      error: 'user_id, product_id, transaction_id는 필수입니다.' 
+    });
   }
 
+  // StoreKit 2 Transaction 방식만 지원
+  if (verification_method !== 'storekit2_transaction') {
+    return reply.code(400).send({ 
+      error: 'storekit2_transaction 방식만 지원됩니다.' 
+    });
+  }
+
+  try {
+    // 0. Rate Limiting 체크
+    const rateLimitCheck = checkPurchaseRateLimit(user_id, transaction_id);
+    if (!rateLimitCheck.allowed) {
+      fastify.log.warn(`Rate limit 차단: user=${user_id}, transaction=${transaction_id}, reason=${rateLimitCheck.reason}`);
+      return reply.code(429).send({ error: rateLimitCheck.reason });
+    }
+
+    // 1. 중복 거래 확인 (Transaction ID 기준)
+    const { data: existingTransaction, error: duplicateCheckError } = await supabase
+      .from('coin_transactions')
+      .select('id, transaction_id')
+      .eq('transaction_id', transaction_id)
+      .single();
+
+    if (existingTransaction) {
+      fastify.log.warn(`중복 거래 시도: transaction_id=${transaction_id}, user=${user_id}`);
+      return reply.code(400).send({ error: '이미 처리된 거래입니다.' });
+    }
+
+    if (duplicateCheckError && duplicateCheckError.code !== 'PGRST116') {
+      fastify.log.error(`중복 거래 확인 오류: ${duplicateCheckError.message}`);
+      return reply.code(500).send({ error: '거래 확인 중 오류가 발생했습니다.' });
+    }
+
+    // 2. ⚠️ App Store Server API 검증 - 이제 필수!
+    const appleVerification = await verifyWithAppleServer(transaction_id);
+    
+    if (!appleVerification.success) {
+      fastify.log.error(`Apple 서버 검증 실패: transaction_id=${transaction_id}, error=${appleVerification.error}`);
+      return reply.code(400).send({ error: 'Apple 서버 검증에 실패했습니다. 유효하지 않은 거래입니다.' });
+    }
+
+    // Apple 서버 응답과 클라이언트 데이터 일치 확인
+    if (appleVerification.data.productId !== product_id) {
+      fastify.log.error(`상품 ID 불일치: client=${product_id}, apple=${appleVerification.data.productId}`);
+      return reply.code(400).send({ error: '상품 정보가 일치하지 않습니다.' });
+    }
+
+    // Bundle ID 검증 추가
+    const expectedBundleId = process.env.APPLE_BUNDLE_ID || process.env.APN_BUNDLE_ID;
+    if (appleVerification.data.bundleId !== expectedBundleId) {
+      fastify.log.error(`Bundle ID 불일치: expected=${expectedBundleId}, received=${appleVerification.data.bundleId}`);
+      return reply.code(400).send({ error: '앱 정보가 일치하지 않습니다.' });
+    }
+
+    // 거래 상태 검증 (refunded, cancelled 등 체크)
+    if (appleVerification.data.transactionReason === 'REFUND') {
+      fastify.log.warn(`환불된 거래 시도: transaction_id=${transaction_id}`);
+      return reply.code(400).send({ error: '환불된 거래입니다.' });
+    }
+
+    // 3. 환경 검증 (개발/프로덕션) - Apple 서버 데이터 기준으로
+    const expectedEnvironment = process.env.NODE_ENV === 'production' ? 'Production' : 'Sandbox';
+    if (appleVerification.data.environment !== expectedEnvironment) {
+      fastify.log.error(`환경 불일치: expected=${expectedEnvironment}, apple=${appleVerification.data.environment}`);
+      return reply.code(400).send({ error: '환경 정보가 일치하지 않습니다.' });
+    }
+
+    // 4. 거래 날짜 검증 (너무 오래된 거래 차단)
+    const transactionDate = new Date(appleVerification.data.purchaseDate);
+    const now = new Date();
+    const maxAge = 24 * 60 * 60 * 1000; // 24시간
+    
+    if (now.getTime() - transactionDate.getTime() > maxAge) {
+      fastify.log.warn(`오래된 거래 시도: transaction_id=${transaction_id}, date=${transactionDate}`);
+      return reply.code(400).send({ error: '거래가 너무 오래되었습니다.' });
+    }
+
+    // 5. StoreKit 2 Transaction 검증 로깅
+    fastify.log.info(`Apple 검증 성공: user=${user_id}, product=${product_id}, transaction=${transaction_id}, env=${appleVerification.data.environment}`);
+
+    // 6. Apple에서 확인된 상품 ID로 코인 수량 계산
+    const coinAmount = getCoinAmountForProductId(appleVerification.data.productId);
+    
+    if (coinAmount === 0) {
+      return reply.code(400).send({ error: '유효하지 않은 상품 ID입니다.' });
+    }
+
+    // 7. 코인 충전 처리
+    const chargeResult = await chargeCoinsToUser(
+      user_id, 
+      coinAmount, 
+      "인앱구매",
+      transaction_id
+    );
+    
+    if (chargeResult.success) {
+      // 성공 시 보안 로그
+      fastify.log.info(`코인 충전 성공: user=${user_id}, amount=${coinAmount}, transaction=${transaction_id}, balance=${chargeResult.newBalance}`);
+      
+      return reply.send({ 
+        success: true, 
+        message: 'Apple 서버 검증을 통해 코인이 성공적으로 충전되었습니다.',
+        balance: chargeResult.newBalance,
+        charged_amount: coinAmount,
+        product_id: appleVerification.data.productId, // Apple에서 확인된 상품 ID 사용
+        verification_method: 'apple_server_verified'
+      });
+    } else {
+      return reply.code(500).send({ error: chargeResult.error });
+    }
+
+  } catch (err) {
+    fastify.log.error(`코인 충전 중 예외 발생 (user: ${user_id}):`, err);
+    return reply.code(500).send({ error: '서버 내부 오류로 검증에 실패했습니다.' });
+  }
+});
+
+// App Store Server API 검증 함수
+async function verifyWithAppleServer(transactionId) {
+  try {
+    // Apple API 인증 정보 확인 (App Store Server API 전용)
+    const hasAppleAuth = (process.env.APPLE_KEY_ID || process.env.APN_KEY_ID) && 
+                        (process.env.APPLE_TEAM_ID || process.env.APN_TEAM_ID) && 
+                        (process.env.APPLE_BUNDLE_ID || process.env.APN_BUNDLE_ID) &&
+                        (process.env.APPLE_KEY_PATH || process.env.APN_KEY_PATH);
+    
+    if (!hasAppleAuth) {
+      return {
+        success: false,
+        error: 'Apple API 인증 정보가 설정되지 않았습니다. P8 파일 또는 환경변수를 확인하세요.'
+      };
+    }
+
+    // App Store Server API 엔드포인트
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://api.storekit.itunes.apple.com'
+      : 'https://api.storekit-sandbox.itunes.apple.com';
+    
+    const url = `${baseUrl}/inApps/v1/transactions/${transactionId}`;
+    
+    fastify.log.info(`Apple API 요청 시작:`, {
+      url: url,
+      transactionId: transactionId,
+      environment: process.env.NODE_ENV
+    });
+    
+    // JWT 토큰 생성
+    const authToken = generateAppleJWT();
+    
+    const response = await axios.get(url, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 15000 // 15초 타임아웃
+    });
+
+    fastify.log.info(`Apple API 응답:`, {
+      status: response.status,
+      headers: response.headers,
+      hasSignedTransactionInfo: !!response.data?.signedTransactionInfo
+    });
+
+    if (response.status === 200) {
+      // JWS 응답 디코딩 및 검증
+      const transactionInfo = decodeAndVerifyJWS(response.data.signedTransactionInfo);
+      
+      if (!transactionInfo) {
+        return {
+          success: false,
+          error: 'Apple 거래 정보 검증에 실패했습니다.'
+        };
+      }
+
+      // 거래 정보 상세 검증
+      const validationResult = validateTransactionInfo(transactionInfo);
+      if (!validationResult.valid) {
+        return {
+          success: false,
+          error: validationResult.error
+        };
+      }
+      
+      // Bundle ID 검증
+      const expectedBundleId = process.env.APPLE_BUNDLE_ID || process.env.APN_BUNDLE_ID;
+      if (transactionInfo.bundleId !== expectedBundleId) {
+        fastify.log.error(`Bundle ID 불일치: expected=${expectedBundleId}, received=${transactionInfo.bundleId}`);
+        return {
+          success: false,
+          error: '앱 정보가 일치하지 않습니다.'
+        };
+      }
+      
+      return {
+        success: true,
+        data: {
+          transactionId: transactionInfo.transactionId,
+          originalTransactionId: transactionInfo.originalTransactionId,
+          productId: transactionInfo.productId,
+          bundleId: transactionInfo.bundleId,
+          purchaseDate: transactionInfo.purchaseDate,
+          environment: transactionInfo.environment,
+          transactionReason: transactionInfo.transactionReason,
+          type: transactionInfo.type,
+          appAccountToken: transactionInfo.appAccountToken
+        }
+      };
+    } else {
+      return {
+        success: false,
+        error: `Apple API 응답 오류: ${response.status} - 거래를 찾을 수 없습니다.`
+      };
+    }
+
+  } catch (error) {
+    // 오류 정보를 더 자세히 로깅
+    const errorDetails = {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      requestUrl: error.config?.url,
+      requestHeaders: error.config?.headers,
+      code: error.code
+    };
+    
+    fastify.log.error('Apple API 요청 중 오류:', errorDetails);
+
+    if (error.response) {
+      // Apple API 에러 응답
+      if (error.response.status === 404) {
+        return {
+          success: false,
+          error: '존재하지 않는 거래 ID입니다.'
+        };
+      } else if (error.response.status === 401) {
+        return {
+          success: false,
+          error: 'Apple API 인증에 실패했습니다.'
+        };
+      } else if (error.response.status === 403) {
+        return {
+          success: false,
+          error: 'Apple API 권한이 없습니다. App Store Connect에서 API 키 권한을 확인하세요.'
+        };
+      } else {
+        return {
+          success: false,
+          error: `Apple API 오류: ${error.response.status} - ${error.response.statusText}`
+        };
+      }
+    } else if (error.code === 'ECONNABORTED') {
+      return {
+        success: false,
+        error: 'Apple 서버 응답 시간 초과'
+      };
+    } else {
+      return {
+        success: false,
+        error: `Apple 서버 통신 오류: ${error.message}`
+      };
+    }
+  }
+}
+
+// 거래 정보 상세 검증
+function validateTransactionInfo(transactionInfo) {
+  // 1. 필수 필드 확인
+  if (!transactionInfo.transactionId || !transactionInfo.productId || !transactionInfo.bundleId) {
+    return { valid: false, error: '거래 정보가 불완전합니다.' };
+  }
+
+  // 2. Bundle ID 검증
+  if (transactionInfo.bundleId !== process.env.APN_BUNDLE_ID) {
+    return { valid: false, error: '앱 정보가 일치하지 않습니다.' };
+  }
+
+  // 3. 거래 유형 검증 (Auto-Renewable Subscription이 아닌 일반 인앱 구매여야 함)
+  if (transactionInfo.type !== 'Non-Renewable Subscription' && transactionInfo.type !== 'Consumable') {
+    // 실제로는 대부분 'Consumable'이어야 함
+    fastify.log.warn(`예상과 다른 거래 유형: ${transactionInfo.type}`);
+  }
+
+  // 4. 환불되지 않은 거래인지 확인
+  if (transactionInfo.transactionReason === 'REFUND') {
+    return { valid: false, error: '환불된 거래입니다.' };
+  }
+
+  // 5. 거래 날짜 검증 (미래 날짜가 아닌지)
+  const purchaseDate = new Date(transactionInfo.purchaseDate);
+  if (purchaseDate > new Date()) {
+    return { valid: false, error: '잘못된 구매 날짜입니다.' };
+  }
+
+  return { valid: true };
+}
+
+// Apple JWT 토큰 생성 (App Store Server API 전용)
+function generateAppleJWT() {
+  // APPLE_ 환경변수 우선, 없으면 APN_ 환경변수 사용
+  const keyId = process.env.APPLE_KEY_ID || process.env.APN_KEY_ID;
+  const teamId = process.env.APPLE_TEAM_ID || process.env.APN_TEAM_ID;
+  const bundleId = process.env.APPLE_BUNDLE_ID || process.env.APN_BUNDLE_ID;
+  const keyPath = process.env.APPLE_KEY_PATH || process.env.APN_KEY_PATH;
+
+  if (!keyId || !teamId || !bundleId) {
+    throw new Error('Apple API 인증 정보가 설정되지 않았습니다.');
+  }
+
+  const header = {
+    alg: 'ES256',
+    kid: keyId,
+    typ: 'JWT'
+  };
+
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: teamId,
+    iat: now,
+    exp: now + (20 * 60), // 20분 만료
+    aud: 'appstoreconnect-v1',
+    bid: bundleId
+  };
+
+  // 디버깅: 사용 중인 인증 정보 로깅
+  fastify.log.info(`Apple JWT 생성 시도:`, {
+    keyId: keyId,
+    teamId: teamId,
+    bundleId: bundleId,
+    keyPath: keyPath,
+    usingDedicatedKey: !!process.env.APPLE_KEY_ID,
+    payload: payload // JWT 페이로드도 출력
+  });
+
+  let privateKey;
+  
+  try {
+    // 1. App Store Server API 전용 키 파일 우선 사용
+    if (process.env.APPLE_KEY_PATH && fs.existsSync(process.env.APPLE_KEY_PATH)) {
+      privateKey = fs.readFileSync(process.env.APPLE_KEY_PATH, 'utf8');
+      fastify.log.info('App Store Server API 전용 P8 파일 로드: ' + process.env.APPLE_KEY_PATH);
+    }
+    // 2. APN 키 파일 사용 (대체)
+    else if (keyPath && fs.existsSync(keyPath)) {
+      privateKey = fs.readFileSync(keyPath, 'utf8');
+      fastify.log.info('APN P8 파일에서 Apple 개인키 로드: ' + keyPath);
+    }
+    // 3. 기본 경로에서 AuthKey.p8 파일 찾기
+    else if (fs.existsSync(path.join(__dirname, 'AuthKey.p8'))) {
+      privateKey = fs.readFileSync(path.join(__dirname, 'AuthKey.p8'), 'utf8');
+      fastify.log.info('기본 경로에서 Apple 개인키 로드: ./AuthKey.p8');
+    }
+    else {
+      throw new Error('Apple 개인키를 찾을 수 없습니다. P8 파일 필요합니다.');
+    }
+
+    const token = jwt.sign(payload, privateKey, {
+      algorithm: 'ES256',
+      header: header
+    });
+    
+    fastify.log.info(`JWT 토큰 생성 성공 (길이: ${token.length})`);
+    return token;
+
+  } catch (error) {
+    fastify.log.error(`JWT 토큰 생성 실패: ${error.message}`);
+    throw new Error(`JWT 토큰 생성 실패: ${error.message}`);
+  }
+}
+
+// JWS 디코딩 및 검증 함수 (보안 강화)
+function decodeAndVerifyJWS(jwsData) {
+  try {
+    // JWS 형식 검증
+    const parts = jwsData.split('.');
+    if (parts.length !== 3) {
+      throw new Error('잘못된 JWS 형식');
+    }
+
+    // 헤더 디코딩
+    const header = JSON.parse(Buffer.from(parts[0], 'base64url').toString());
+    
+    // 페이로드 디코딩
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+    
+    // 기본적인 검증 (실제로는 Apple 공개키로 서명 검증 필요)
+    if (!payload.transactionId || !payload.bundleId) {
+      throw new Error('거래 정보가 불완전합니다.');
+    }
+
+    // 만료 시간 검증
+    if (payload.signedDate) {
+      const signedDate = new Date(payload.signedDate);
+      const now = new Date();
+      const maxAge = 24 * 60 * 60 * 1000; // 24시간
+      
+      if (now.getTime() - signedDate.getTime() > maxAge) {
+        throw new Error('서명이 너무 오래되었습니다.');
+      }
+    }
+
+    return payload;
+    
+  } catch (error) {
+    fastify.log.error(`JWS 디코딩 오류: ${error.message}`);
+    return null;
+  }
+}
+
+// 상품 ID에 따른 코인 수량 반환
+function getCoinAmountForProductId(productId) {
+  const coinMapping = {
+    'hau_product_22': 100,
+    'hau_product_66': 315,
+    'hau_product_154': 770,
+    'hau_product_330': 1725,
+    'hau_product_990': 5400
+  };
+  
+  return coinMapping[productId] || 0;
+}
+
+// 공통 코인 충전 함수
+async function chargeCoinsToUser(userId, amount, description, appleTransactionId = null) {
   try {
     // 1. 현재 잔액 확인 또는 새 레코드 생성
     const { data: userCoin, error: fetchError } = await supabase
       .from('user_coins')
       .select('balance')
-      .eq('user_id', user_id)
+      .eq('user_id', userId)
       .single();
 
     let currentBalance = 0;
@@ -680,8 +1108,7 @@ fastify.post('/api/v1/coins/charge', async (request, reply) => {
         // 새 사용자 - 레코드 생성 필요
         isNewUser = true;
       } else {
-        fastify.log.error(`코인 충전 - 잔액 조회 오류 (user: ${user_id}):`, fetchError);
-        return reply.code(500).send({ error: '코인 잔액 조회 중 오류가 발생했습니다.' });
+        return { success: false, error: '코인 잔액 조회 중 오류가 발생했습니다.' };
       }
     } else {
       currentBalance = userCoin.balance;
@@ -694,54 +1121,50 @@ fastify.post('/api/v1/coins/charge', async (request, reply) => {
       const { error: insertError } = await supabase
         .from('user_coins')
         .insert({
-          user_id: user_id,
+          user_id: userId,
           balance: newBalance
         });
 
       if (insertError) {
-        fastify.log.error(`코인 충전 - 새 레코드 생성 오류 (user: ${user_id}):`, insertError);
-        return reply.code(500).send({ error: '코인 충전 중 오류가 발생했습니다.' });
+        return { success: false, error: '코인 충전 중 오류가 발생했습니다.' };
       }
     } else {
       const { error: updateError } = await supabase
         .from('user_coins')
         .update({ balance: newBalance })
-        .eq('user_id', user_id);
+        .eq('user_id', userId);
 
       if (updateError) {
-        fastify.log.error(`코인 충전 - 잔액 업데이트 오류 (user: ${user_id}):`, updateError);
-        return reply.code(500).send({ error: '코인 충전 중 오류가 발생했습니다.' });
+        return { success: false, error: '코인 충전 중 오류가 발생했습니다.' };
       }
     }
 
-    // 3. 거래 기록 추가
+    // 3. 거래 기록 추가 (Apple Transaction ID 포함)
+    const transactionRecord = {
+      user_id: userId,
+      transaction_type: 'charge',
+      amount: amount,
+      balance_after: newBalance,
+      description: description,
+      transaction_id: appleTransactionId
+    };
+
     const { error: transactionError } = await supabase
       .from('coin_transactions')
-      .insert({
-        user_id: user_id,
-        transaction_type: 'charge',
-        amount: amount,
-        balance_after: newBalance,
-        description: description || `코인 충전 (+${amount})`
-      });
+      .insert(transactionRecord);
 
     if (transactionError) {
-      fastify.log.error(`코인 충전 - 거래 기록 오류 (user: ${user_id}):`, transactionError);
-      // 거래 기록 실패는 치명적이지 않으므로 계속 진행
+      // 거래 기록 실패는 치명적이지 않으므로 경고만 로그
+      fastify.log.warn(`거래 기록 오류 (user: ${userId}):`, transactionError);
     }
 
-    return reply.send({ 
-      success: true, 
-      message: '코인이 성공적으로 충전되었습니다.',
-      balance: newBalance,
-      charged_amount: amount
-    });
+    return { success: true, newBalance };
 
   } catch (err) {
-    fastify.log.error(`코인 충전 중 예외 발생 (user: ${user_id}):`, err);
-    return reply.code(500).send({ error: '서버 내부 오류로 코인 충전에 실패했습니다.' });
+    fastify.log.error(`코인 충전 함수 오류 (user: ${userId}):`, err);
+    return { success: false, error: '서버 내부 오류로 코인 충전에 실패했습니다.' };
   }
-});
+}
 
 // 코인 충분 여부 확인 엔드포인트
 fastify.post('/api/v1/coins/check-sufficient', async (request, reply) => {
@@ -947,6 +1370,95 @@ fastify.post('/api/v1/coins/call/update', async (request, reply) => {
     return reply.code(500).send({ error: '서버 내부 오류로 통화 업데이트에 실패했습니다.' });
   }
 });
+
+// 코인 거래 내역 조회 엔드포인트
+fastify.get('/api/v1/coins/transactions/:user_id', async (request, reply) => {
+  const { user_id } = request.params;
+  const { page = 1, limit = 20 } = request.query;
+
+  if (!user_id) {
+    return reply.code(400).send({ error: 'user_id는 필수입니다.' });
+  }
+
+  try {
+    const offset = (page - 1) * limit;
+
+    // 거래 내역 조회 (최신순)
+    const { data: transactions, error, count } = await supabase
+      .from('coin_transactions')
+      .select('*', { count: 'exact' })
+      .eq('user_id', user_id)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      fastify.log.error(`거래 내역 조회 오류 (user: ${user_id}):`, error);
+      return reply.code(500).send({ error: '거래 내역 조회 중 오류가 발생했습니다.' });
+    }
+
+    return reply.send({ 
+      success: true,
+      transactions: transactions || [],
+      pagination: {
+        current_page: parseInt(page),
+        per_page: parseInt(limit),
+        total_count: count || 0,
+        total_pages: Math.ceil((count || 0) / limit)
+      }
+    });
+
+  } catch (err) {
+    fastify.log.error(`거래 내역 조회 중 예외 발생 (user: ${user_id}):`, err);
+    return reply.code(500).send({ error: '서버 내부 오류로 거래 내역 조회에 실패했습니다.' });
+  }
+});
+
+// 구매 시도 제한 체크 함수
+function checkPurchaseRateLimit(userId, transactionId) {
+  const now = Date.now();
+  const userKey = `purchase_${userId}`;
+  const transactionKey = `transaction_${transactionId}`;
+  
+  // 사용자별 구매 제한 (1분에 최대 3번)
+  const userAttempts = purchaseAttempts.get(userKey) || [];
+  const recentUserAttempts = userAttempts.filter(time => now - time < 60000);
+  
+  if (recentUserAttempts.length >= 3) {
+    return { allowed: false, reason: '구매 시도가 너무 빈번합니다. 잠시 후 다시 시도해주세요.' };
+  }
+  
+  // Transaction ID별 중복 요청 제한 (5분 내 같은 Transaction ID 요청 차단)
+  const transactionAttempts = purchaseAttempts.get(transactionKey) || [];
+  const recentTransactionAttempts = transactionAttempts.filter(time => now - time < 300000);
+  
+  if (recentTransactionAttempts.length >= 1) {
+    return { allowed: false, reason: '동일한 거래가 이미 처리 중입니다.' };
+  }
+  
+  // 시도 기록 저장
+  purchaseAttempts.set(userKey, [...recentUserAttempts, now]);
+  purchaseAttempts.set(transactionKey, [...recentTransactionAttempts, now]);
+  
+  // 오래된 기록 정리 (메모리 절약)
+  setTimeout(() => {
+    const cleanUserAttempts = (purchaseAttempts.get(userKey) || []).filter(time => Date.now() - time < 60000);
+    const cleanTransactionAttempts = (purchaseAttempts.get(transactionKey) || []).filter(time => Date.now() - time < 300000);
+    
+    if (cleanUserAttempts.length > 0) {
+      purchaseAttempts.set(userKey, cleanUserAttempts);
+    } else {
+      purchaseAttempts.delete(userKey);
+    }
+    
+    if (cleanTransactionAttempts.length > 0) {
+      purchaseAttempts.set(transactionKey, cleanTransactionAttempts);
+    } else {
+      purchaseAttempts.delete(transactionKey);
+    }
+  }, 60000);
+  
+  return { allowed: true };
+}
 
 // 서버 시작 (포트 3000)
 fastify.listen({ port: 3000, host: '0.0.0.0' }, (err, address) => {

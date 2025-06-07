@@ -73,7 +73,6 @@ class UserViewModel: ObservableObject {
         isLoading = true
 
         guard let userId = userId else {
-            print("사용자 ID가 없습니다.")
             isLoading = false
             return
         }
@@ -158,7 +157,6 @@ class UserViewModel: ObservableObject {
                     }
                 } else {
                     // 사용자가 존재하지 않음 - 새 프로필 생성
-                    print("사용자 프로필을 찾을 수 없습니다. 새 프로필을 생성합니다.")
                     await createAndSaveNewProfile(userId: userId)
                 }
             } catch {
@@ -287,14 +285,10 @@ class UserViewModel: ObservableObject {
             do {
                 // 서버로 전송할 데이터 준비
                 // Supabase에 데이터 업데이트
-                print("프로필 저장 시도: auth_id=\(userId)")
                 let response = try await client.from("users")
                     .update(userData)
                     .eq("auth_id", value: userId)
                     .execute()
-
-                print("프로필 저장 성공: \(response)")
-                print("응답 상태 코드: \(response.status)")
                 
                 await MainActor.run {
                     // 원본 데이터 업데이트 (저장 성공 시점에 원본 데이터 업데이트)
@@ -379,8 +373,6 @@ class UserViewModel: ObservableObject {
                 }
             }
         }
-        
-        print("회원탈퇴 요청이 전송되었습니다.")
     }
 
     // ProfileView의 TextEditor 바인딩을 위한 헬퍼
@@ -410,7 +402,6 @@ class UserViewModel: ObservableObject {
         
         // 서버에 조용히 저장
         guard let userId = userId else {
-            print("사용자 ID가 없습니다.")
             return
         }
         
@@ -422,8 +413,6 @@ class UserViewModel: ObservableObject {
                     .update(userData)
                     .eq("auth_id", value: userId)
                     .execute()
-
-                print("프로필 저장 성공: \(response.status)")
                 
                 // 원본 데이터 업데이트 (저장 성공 시점에 원본 데이터 업데이트)
                 await MainActor.run {
@@ -446,7 +435,6 @@ class UserViewModel: ObservableObject {
         
         // 서버에 조용히 저장
         guard let userId = userId else {
-            print("사용자 ID가 없습니다.")
             return
         }
         

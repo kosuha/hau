@@ -105,11 +105,8 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     // 통화 종료
     func endCall(with uuid: UUID) {
-        print("🔄 endCall 호출됨 - 현재 상태: isCallActive: \(isCallActive), shouldShowCallScreen: \(shouldShowCallScreen)")
-        
         // 이미 통화가 종료된 상태라면 중복 처리 방지
         if !isCallActive {
-            print("⚠️ 이미 통화가 종료된 상태입니다. 중복 처리를 방지합니다.")
             return
         }
         
@@ -124,16 +121,12 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
                 DispatchQueue.main.async {
                     self.resetCallState()
                 }
-            } else {
-                print("✅ 통화 종료 요청이 성공했습니다.")
-                // 상태 초기화는 provider delegate에서 처리됨
             }
         }
     }
     
     // 통화 상태 초기화
     private func resetCallState() {
-        print("🔄 통화 상태를 초기화합니다.")
         shouldShowCallScreen = false
         isCallActive = false
         isCallInProgress = false
@@ -316,12 +309,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
                 print("유효하지 않은 응답")
                 return
             }
-            
-            // if httpResponse.statusCode == 200 {
-            //     print("VoIP 푸시 토큰이 성공적으로 등록되었습니다.")
-            // } else {
-            //     print("서버 오류: 상태 코드 \(httpResponse.statusCode)")
-            // }
         }
         
         task.resume()
@@ -340,16 +327,12 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
         // 사용자가 전화를 받았을 때
-        print("📞 사용자가 통화를 수락했습니다.")
-        print("📞 현재 상태 - isCallActive: \(isCallActive), shouldShowCallScreen: \(shouldShowCallScreen), isCallInProgress: \(isCallInProgress)")
-        
         isCallActive = true
         isCallInProgress = true
         
         // shouldShowCallScreen은 navigateToCallScreen에서만 설정
         // 메인 스레드에서 UI 업데이트 확보
         DispatchQueue.main.async {
-            print("📞 CallView 화면으로 전환합니다.")
             self.navigateToCallScreen()
         }
         
@@ -358,8 +341,6 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         // 사용자가 전화를 종료했을 때 (또는 시스템에 의해 종료될 때)
-        print("🔄 CXEndCallAction 수행됨 - 통화를 종료합니다.")
-        
         // 메인 스레드에서 상태 초기화
         DispatchQueue.main.async {
             self.resetCallState()
@@ -429,11 +410,8 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     // navigateToCallScreen 메서드 수정
     func navigateToCallScreen() {
-        print("🔄 navigateToCallScreen 호출 - 현재 shouldShowCallScreen: \(shouldShowCallScreen)")
-        
         // 이미 true라면 중복 설정 방지
         if shouldShowCallScreen {
-            print("⚠️ 이미 shouldShowCallScreen이 true입니다. 중복 설정을 방지합니다.")
             return
         }
         
@@ -459,11 +437,8 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
         // VoIP 푸시 알림 수신
         if type == .voIP {
-            print("🔔 VoIP 푸시 알림 수신됨 - 현재 통화 상태: isCallInProgress=\(isCallInProgress), isCallActive=\(isCallActive)")
-            
             // 이미 통화 중인 경우 새로운 통화 거부
             if isCallInProgress {
-                print("CallManager: 이미 통화 중이므로 새로운 통화를 거부합니다.")
                 completion()
                 return
             }
@@ -472,16 +447,12 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
             guard let uuidString = payload.dictionaryPayload["uuid"] as? String,
                   let uuid = UUID(uuidString: uuidString),
                   let handle = payload.dictionaryPayload["handle"] as? String else {
-                print("VoIP 푸시 페이로드에서 필요한 정보를 추출할 수 없습니다.")
                 completion()
                 return
             }
             
-            print("🔔 VoIP 푸시로 수신 전화 표시 시작 - UUID: \(uuid), Handle: \(handle)")
-            
             // 수신 전화 표시
             reportIncomingCall(uuid: uuid, handle: handle) { success in
-                print("🔔 수신 전화 표시 결과: \(success)")
                 completion()
             }
         }

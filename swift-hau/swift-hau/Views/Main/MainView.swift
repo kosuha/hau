@@ -234,6 +234,7 @@ struct MainView: View {
                 if let userId = newUserId {
                     coinViewModel.setUserId(userId)
                     Task {
+                        // 백그라운드에서 코인 잔액 업데이트 (네비게이션에 영향 없음)
                         await coinViewModel.fetchCoinBalance()
                     }
                 }

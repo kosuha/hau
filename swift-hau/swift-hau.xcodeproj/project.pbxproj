@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8E2DAC6A2DF186FF00B98B2B /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8E2DAC692DF186FF00B98B2B /* StoreKit.framework */; };
 		8E514C122DD8FBA3007CC0AC /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 8E514C112DD8FBA3007CC0AC /* WebRTC */; };
 		8EB660FD2DAE4EED00FCBA67 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 8EB660FC2DAE4EED00FCBA67 /* Supabase */; };
 		8EB661062DAE5CEC00FCBA67 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 8EB661052DAE5CEC00FCBA67 /* GoogleSignIn */; };
@@ -14,6 +15,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		8E2DAC692DF186FF00B98B2B /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		8EDF8FEB2DA8E78200446E23 /* swift-hau.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "swift-hau.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -45,6 +47,7 @@
 			files = (
 				8EB660FD2DAE4EED00FCBA67 /* Supabase in Frameworks */,
 				8E514C122DD8FBA3007CC0AC /* WebRTC in Frameworks */,
+				8E2DAC6A2DF186FF00B98B2B /* StoreKit.framework in Frameworks */,
 				8EB661062DAE5CEC00FCBA67 /* GoogleSignIn in Frameworks */,
 				8EB661082DAE5CEC00FCBA67 /* GoogleSignInSwift in Frameworks */,
 			);
@@ -53,10 +56,19 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		8E2DAC682DF186FF00B98B2B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				8E2DAC692DF186FF00B98B2B /* StoreKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		8EDF8FE22DA8E78200446E23 = {
 			isa = PBXGroup;
 			children = (
 				8EDF8FED2DA8E78200446E23 /* swift-hau */,
+				8E2DAC682DF186FF00B98B2B /* Frameworks */,
 				8EDF8FEC2DA8E78200446E23 /* Products */,
 			);
 			sourceTree = "<group>";

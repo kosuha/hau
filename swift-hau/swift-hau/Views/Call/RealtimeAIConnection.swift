@@ -103,13 +103,11 @@ class RealtimeAIConnection: NSObject {
         
         // 이미 연결 시도 중이면 중복 차단
         if isConnectionInProgress {
-            print("⚠️ 이미 연결 시도 중입니다. 중복 시도를 차단합니다.")
             connectionLock.unlock()
             return false
         }
         
         isConnectionInProgress = true
-        print("🔧 initialize 시작 - 연결 진행 상태로 설정")
         
         // 이전 연결 완전히 정리
         cleanupConnection()
@@ -137,14 +135,12 @@ class RealtimeAIConnection: NSObject {
                 
                 if success {
                     self.isConnected = true
-                    print("✅ initialize 성공 - 연결 완료")
                     // 메인 스레드에서 콜백 호출
                     DispatchQueue.main.async {
                         self.onStateChange?(true)
                     }
                 } else {
                     // 실패 시 연결 정리
-                    print("❌ initialize 실패 - 연결 정리")
                     self.cleanupConnection()
                 }
                 
@@ -169,26 +165,22 @@ class RealtimeAIConnection: NSObject {
     private func setupLocalAudioTrack() {
         let audioConstrains = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
         guard let audioSource = factory?.audioSource(with: audioConstrains) else {
-            print("setupLocalAudioTrack: ERROR - 오디오 소스 생성 실패")
             return
         }
 
         audioTrack = factory?.audioTrack(with: audioSource, trackId: "audio0")
         guard let currentAudioTrack = audioTrack else {
-            print("setupLocalAudioTrack: ERROR - 오디오 트랙 생성 실패")
             return
         }
 
         let streamId = "stream0"
         guard let localStream = factory?.mediaStream(withStreamId: streamId) else {
-             print("setupLocalAudioTrack: ERROR - 로컬 미디어 스트림 생성 실패")
              return
         }
 
         localStream.addAudioTrack(currentAudioTrack)
 
         guard let pc = peerConnection else {
-             print("setupLocalAudioTrack: ERROR - PeerConnection이 nil 상태")
              return
         }
         pc.add(currentAudioTrack, streamIds: [streamId])
@@ -210,14 +202,12 @@ class RealtimeAIConnection: NSObject {
         
         peerConnection?.offer(for: constraints) { [weak self] (sdp, error) in
             guard let self = self, let sdp = sdp, error == nil else {
-                print("SDP 생성 에러: \(error?.localizedDescription ?? "알 수 없는 에러")")
                 completion(false)
                 return
             }
             
             self.peerConnection?.setLocalDescription(sdp) { error in
                 if let error = error {
-                    print("로컬 SDP 설정 에러: \(error.localizedDescription)")
                     completion(false)
                     return
                 }
@@ -244,7 +234,6 @@ class RealtimeAIConnection: NSObject {
         
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             guard let self = self, let data = data, error == nil else {
-                print("네트워크 에러: \(error?.localizedDescription ?? "알 수 없는 에러")")
                 completion(false)
                 return
             }
@@ -253,7 +242,6 @@ class RealtimeAIConnection: NSObject {
                 let sdp = RTCSessionDescription(type: .answer, sdp: sdpString)
                 self.peerConnection?.setRemoteDescription(sdp) { error in
                     if let error = error {
-                        print("원격 SDP 설정 에러: \(error.localizedDescription)")
                         completion(false)
                     } else {
                         completion(true)
@@ -270,10 +258,7 @@ class RealtimeAIConnection: NSObject {
         
         // 통화 진행 중이 아닐 때만 타이머 정리
         if currentTransactionId == nil {
-            print("🔍 cleanupConnection - 통화 진행 중이 아니므로 타이머 정리")
             stopCoinDeductionTimer()
-        } else {
-            print("🔍 cleanupConnection - 통화 진행 중이므로 타이머 유지")
         }
         
         // 중복 차감 방지 플래그 초기화
@@ -282,7 +267,6 @@ class RealtimeAIConnection: NSObject {
         // 통화 관련 변수는 여기서 리셋하지 않음 (WebRTC 연결과 별개의 생명주기)
         // currentTransactionId = nil
         // totalCoinsUsed = 0
-        print("🔍 cleanupConnection 호출 - WebRTC 연결만 정리, 통화 거래는 유지. currentTransactionId: \(currentTransactionId ?? "nil")")
         
         if let dataChannel = self.dataChannel {
             dataChannel.close()
@@ -323,16 +307,12 @@ class RealtimeAIConnection: NSObject {
         // WebRTC 연결은 정리하되, 통화 트랜잭션 ID는 즉시 리셋하지 않습니다.
         // 이는 CallView가 잠깐 사라졌다가 다시 나타나는 경우 등, WebRTC는 재연결되지만 통화 세션은 유지되어야 하는 상황을 위함입니다.
         if let cm = self.callManager, cm.isCallInProgress, cm.shouldShowCallScreen {
-            print("🤔 RealtimeAIConnection.disconnect() 호출됨. CallManager가 활성 통화를 인지하고 있어 트랜잭션 ID는 즉시 리셋하지 않습니다. currentTransactionId: \(currentTransactionId ?? "nil")")
             shouldResetTransaction = false
         }
 
         if shouldResetTransaction {
-            print("🔍 disconnect 호출 - 통화 관련 변수도 리셋합니다. currentTransactionId: \(currentTransactionId ?? "nil")")
             currentTransactionId = nil
             totalCoinsUsed = 0
-        } else {
-            print("🔍 disconnect 호출 - WebRTC는 정리하지만 CallManager의 활성 통화 상태로 인해 트랜잭션 세부 정보는 유지됩니다. currentTransactionId: \(currentTransactionId ?? "nil")")
         }
         
         // cleanupConnection은 currentTransactionId 상태를 확인한 후 호출
@@ -357,19 +337,11 @@ class RealtimeAIConnection: NSObject {
     // 통화 시작 시 호출되는 메서드
     // 반환 타입을 Bool로 변경하여 포인트 부족 시 실패를 알림
     func startCall() async -> Bool {
-        
-        print("🔍 startCall 호출됨 - currentTransactionId: \(currentTransactionId ?? "nil")")
-        
         // 이미 통화가 진행 중인 경우 중복 시작 방지
         if currentTransactionId != nil {
-            print("⚠️ 이미 통화가 진행 중입니다. currentTransactionId: \(currentTransactionId!)")
-            
             // 타이머 상태 확인 및 재시작
             if coinDeductionTimer == nil {
-                print("📍 타이머가 정리되어 있어서 코인 차감 타이머를 재시작합니다.")
                 startCoinDeductionTimer()
-            } else {
-                print("📍 타이머가 이미 실행 중입니다.")
             }
             
             return true // 이미 진행 중이므로 성공으로 처리
@@ -377,7 +349,6 @@ class RealtimeAIConnection: NSObject {
         
         // 연결이 진행 중인 경우에도 중복 시작 방지
         if isConnectionInProgress {
-            print("⚠️ 이미 연결이 진행 중입니다. 잠시 후 다시 시도하세요.")
             return false
         }
         
@@ -385,7 +356,6 @@ class RealtimeAIConnection: NSObject {
         do {
             let session = try await client.auth.session
             self.currentAuthId = session.user.id.uuidString
-            print("🔍 사용자 인증 ID 설정됨: \(self.currentAuthId!)")
         } catch {
             print("startCall 오류: 사용자 세션 정보를 가져오는데 실패했습니다 - \(error.localizedDescription)")
             return false // 세션 정보 없으면 시작 불가
@@ -412,9 +382,6 @@ class RealtimeAIConnection: NSObject {
             if !response.data.isEmpty {
                 let pointsResponses = try JSONDecoder().decode([CurrentPointsResponse].self, from: response.data)
                 pointsResponse = pointsResponses.first // 첫 번째 요소 가져오기 (없으면 nil)
-            } else {
-                 // 데이터가 비어있으면 pointsResponse는 nil로 유지
-                 print("코인 조회 결과 데이터가 비어있습니다. 사용자 ID: \(currentAuthUserId)")
             }
 
             if pointsResponse == nil {
@@ -444,7 +411,8 @@ class RealtimeAIConnection: NSObject {
             let apiBaseURL = AppConfig.baseURL
             if apiBaseURL.isEmpty {
                 print("API Base URL이 설정되지 않았습니다.")
-                print("⚠️ 코인 차감 없이 통화를 진행합니다.")
+                // 에러 처리 필요
+                return false
             } else {
                 let url = URL(string: "\(apiBaseURL)/coins/call/start")!
                 var request = URLRequest(url: url)
@@ -461,38 +429,25 @@ class RealtimeAIConnection: NSObject {
                 let (data, response) = try await URLSession.shared.data(for: request)
                 
                 if let httpResponse = response as? HTTPURLResponse {
-                    print("통화 시작 API 응답 상태 코드: \(httpResponse.statusCode)")
                     if let responseString = String(data: data, encoding: .utf8) {
                         print("통화 시작 API 응답 데이터: \(responseString)")
                     }
                     
                     if httpResponse.statusCode == 200 {
                         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                            print("JSON 파싱 성공: \(json)")
                             if let success = json["success"] as? Bool,
                                success,
                                let transactionId = json["transaction_id"] as? String {
                                 currentTransactionId = transactionId
-                                print("통화 시작 API 성공: transaction_id = \(transactionId)")
-                            } else {
-                                print("통화 시작 API 응답 파싱 실패")
-                                print("success: \(json["success"] ?? "nil")")
-                                print("transaction_id: \(json["transaction_id"] ?? "nil")")
-                                print("⚠️ 코인 차감 없이 통화를 진행합니다.")
                             }
-                        } else {
-                            print("JSON 파싱 실패")
-                            print("⚠️ 코인 차감 없이 통화를 진행합니다.")
                         }
-                    } else {
-                        print("통화 시작 API 오류: \(httpResponse.statusCode)")
-                        print("⚠️ 코인 차감 없이 통화를 진행합니다.")
                     }
                 }
             }
         } catch {
             print("통화 시작 API 호출 오류: \(error)")
-            print("⚠️ 코인 차감 없이 통화를 진행합니다.")
+            // 에러 처리 필요
+            return false
         }
         
         // 코인 차감 타이머 시작 (CallView 타이머와 동기화)
@@ -561,7 +516,6 @@ class RealtimeAIConnection: NSObject {
         }
         
         if dataChannel.readyState != .open {
-            print("인사말 전송 대기 중: 데이터 채널 상태 = \(dataChannel.readyState.rawValue)")
             if retryCount > 0 {
                 DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) { [weak self] in
                     self?.attemptToSendGreeting(retryCount: retryCount - 1)
@@ -576,8 +530,6 @@ class RealtimeAIConnection: NSObject {
             let responseData = try JSONSerialization.data(withJSONObject: responseCreate)
             let responseBuffer = RTCDataBuffer(data: responseData, isBinary: false)
             dataChannel.sendData(responseBuffer)
-            
-            print("AI 응답 트리거 전송 완료")
         } catch {
             print("AI 응답 트리거 전송 오류: \(error.localizedDescription)")
         }
@@ -634,18 +586,15 @@ class RealtimeAIConnection: NSObject {
     // 통화용 코인 차감 메서드
     private func deductCoinsForCall(amount: Int) async {
         guard let authId = self.currentAuthId else {
-            print("인증 ID가 없어서 코인 차감을 건너뜁니다.")
             return
         }
         
         guard let transactionId = self.currentTransactionId else {
-            print("거래 ID가 없어서 코인 차감을 건너뜁니다.")
             return
         }
         
         let apiBaseURL = AppConfig.baseURL
         if apiBaseURL.isEmpty {
-            print("API Base URL이 설정되지 않았습니다.")
             DispatchQueue.main.async {
                 CallManager.shared.callError = "서버 설정 오류로 통화가 중단되었습니다."
             }
@@ -678,13 +627,10 @@ class RealtimeAIConnection: NSObject {
                     if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                        let success = json["success"] as? Bool,
                        success {
-                        print("코인 차감 성공: 추가 \(amount)코인, 총 \(10 + totalCoinsUsed)코인")
-                        
                         // 서버 응답에서 새로운 잔액을 받은 경우 업데이트
                         if let currentBalance = json["current_balance"] as? Int {
                             DispatchQueue.main.async {
                                 self.coinViewModel?.updateLocalBalance(currentBalance)
-                                print("💰 코인 잔액 업데이트: \(currentBalance)개")
                             }
                         } else {
                             // 서버에서 잔액을 제공하지 않은 경우 로컬에서 차감
@@ -705,7 +651,6 @@ class RealtimeAIConnection: NSObject {
                     }
                 } else if httpResponse.statusCode == 400 {
                     // 코인 부족 - 통화 종료
-                    print("코인 부족으로 통화 종료")
                     DispatchQueue.main.async {
                         CallManager.shared.callError = "코인을 모두 소진하여 통화가 중단되었습니다."
                     }
@@ -735,23 +680,19 @@ class RealtimeAIConnection: NSObject {
 
     // 코인 차감 타이머 시작 (CallView 타이머와 동기화)
     private func startCoinDeductionTimer() {
-        print("🔍 startCoinDeductionTimer 호출됨 - CallView 타이머와 동기화 모드")
         
         // currentTransactionId가 이미 있는 경우 (기존 통화 계속)
         if currentTransactionId != nil && callStartTime != nil {
-            print("📍 기존 통화 계속 - 기존 시간 정보 유지")
-            print("📍 기존 경과 시간: \(callDurationSeconds)초")
             // 기존 callStartTime과 경과 시간 정보를 유지
+            print("🔍 기존 통화 계속 - 기존 시간 정보 유지")
+            print("📍 기존 경과 시간: \(callDurationSeconds)초")
         } else {
             // 새로운 통화 시작
-            print("📍 새로운 통화 시작 - 시간 정보 초기화")
             callStartTime = Date()
             elapsedMinutes = 0
             callDurationSeconds = 0
         }
-        
-        print("📍 코인 차감은 CallView 타이머와 동기화하여 실행됩니다")
-        
+
         // CallView의 타이머에 의존하므로 별도 타이머 생성하지 않음
         coinDeductionTimer = nil // 기존 타이머가 있다면 제거
     }
@@ -769,7 +710,6 @@ class RealtimeAIConnection: NSObject {
     private func performCoinDeduction() {
         // 중복 차감 방지
         if isDeducting {
-            print("⚠️ 코인 차감이 이미 진행 중입니다. 중복 실행을 방지합니다.")
             return
         }
         
@@ -786,11 +726,6 @@ class RealtimeAIConnection: NSObject {
         
         let displayMinute = elapsedMinutes + 1
         let displaySeconds = callDurationSeconds % 60
-        print("통화 \(displayMinute)분 \(displaySeconds)초 - \(coinsToDeduct)개 코인 차감")
-        
-        // 디버깅: currentTransactionId 상태 확인
-        print("🔍 코인 차감 시점 - currentTransactionId: \(currentTransactionId ?? "nil")")
-        print("🔍 코인 차감 시점 - currentAuthId: \(currentAuthId ?? "nil")")
         
         // 비동기적으로 코인 차감 (이번 분에 해당하는 코인만 차감)
         Task {
@@ -811,7 +746,6 @@ class RealtimeAIConnection: NSObject {
             if self.callDurationSeconds > 60 && (self.callDurationSeconds - 1) % 60 == 0 {
                 let minutes = self.callDurationSeconds / 60
                 let seconds = self.callDurationSeconds % 60
-                print("⏰ CallView 동기화 - \(minutes)분 \(seconds)초 - 코인 차감 실행")
                 self.performCoinDeduction()
             }
         }
@@ -966,7 +900,6 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
     
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
         if let message = String(data: buffer.data, encoding: .utf8) {
-            // print("데이터 채널 메시지 수신: \\(message)")
             if let json = message.data(using: .utf8) {
                 do {
                     if let jsonData = try JSONSerialization.jsonObject(with: json, options: []) as? [String: Any] {
@@ -1016,7 +949,6 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                                    let transcript = messageContent.first?["transcript"] as? String {
 
                                     debugMessage = "AI: 응답 완료 - \(transcript)"
-                                    print("AI 응답: \(transcript)\n")
                                     
                                     // AI 응답 기록 (비용 계산 제거)
                                     let aiResponse: [String: Any] = [
@@ -1057,7 +989,6 @@ extension RealtimeAIConnection: RTCDataChannelDelegate {
                         }
 
                         if let type = jsonData["type"] as? String, type == "conversation.item.input_audio_transcription.completed" {
-                            // print("jsonData: \(jsonData)")
                             if let transcript = jsonData["transcript"] as? String {
                                 
                                 // 사용자 음성 입력 기록

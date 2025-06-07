@@ -11,6 +11,7 @@ struct CoinTransaction: Identifiable, Codable {
     let balanceAfter: Int
     let createdAt: String
     let description: String
+    let transactionId: String?
     
     enum CodingKeys: String, CodingKey {
         case id, amount
@@ -19,6 +20,7 @@ struct CoinTransaction: Identifiable, Codable {
         case balanceAfter = "balance_after"
         case createdAt = "created_at"
         case description = "description"
+        case transactionId = "transaction_id"
     }
 }
 
@@ -44,7 +46,7 @@ class CoinViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String? = nil
     
-    private var userId: String?
+    var userId: String?
     
     // 사용자 ID 설정
     func setUserId(_ id: String) {

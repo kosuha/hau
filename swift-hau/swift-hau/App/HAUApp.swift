@@ -14,8 +14,6 @@ import UIKit
 // 안전하게 Supabase 클라이언트 초기화
 let client: SupabaseClient = {
     // 릴리즈 모드에서도 로깅하도록 함
-    print("📱 Supabase 초기화 시도")
-    print("📱 SUPABASE_URL: \(AppConfig.supabaseProjectURL ?? "nil")")
     
     guard let supabaseURLString = AppConfig.supabaseProjectURL, 
           !supabaseURLString.isEmpty,
@@ -25,7 +23,6 @@ let client: SupabaseClient = {
            let urlFromInfo = infoDict["SUPABASE_URL"] as? String,
            !urlFromInfo.isEmpty,
            let url = URL(string: urlFromInfo) {
-            print("📱 Info.plist에서 직접 URL 발견: \(urlFromInfo)")
             let key = AppConfig.supabaseProjectKey
             return SupabaseClient(supabaseURL: url, supabaseKey: key)
         }
@@ -36,8 +33,6 @@ let client: SupabaseClient = {
     }
     
     let supabaseKey = AppConfig.supabaseProjectKey
-    
-    print("📱 Supabase 초기화 성공 - URL: \(supabaseURLString)")
     
     return SupabaseClient(supabaseURL: supabaseURL, supabaseKey: supabaseKey)
 }()
@@ -113,6 +108,7 @@ struct HAUApp: App {
                 if let userId = newUserId {
                     coinViewModel.setUserId(userId)
                     Task {
+                        // 백그라운드에서 안전하게 코인 잔액 업데이트
                         await coinViewModel.fetchCoinBalance()
                     }
                 }
