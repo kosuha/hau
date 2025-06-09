@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>API_BASE_URL</key>
+	<string>$(API_BASE_URL)</string>
+	<key>API_HOST</key>
+	<string>$(API_HOST)</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.seonhokim.swift-hau.refresh</string>
@@ -19,6 +23,8 @@
 			</array>
 		</dict>
 	</array>
+	<key>DEBUG_ENABLED</key>
+	<string>$(DEBUG_ENABLED)</string>
 	<key>GIDClientID</key>
 	<string>$(GOOGLE_CLIENT_ID)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
@@ -42,6 +48,10 @@
 	</array>
 	<key>PKPushUsageDescription</key>
 	<string>통화 알림을 받기 위해 푸시 알림을 사용합니다.</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>SUPABASE_URL</key>
+	<string>$(SUPABASE_URL)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
@@ -49,15 +59,5 @@
 		<string>voip</string>
 		<string>processing</string>
 	</array>
-	<key>SUPABASE_URL</key>
-	<string>$(SUPABASE_URL)</string>
-	<key>SUPABASE_ANON_KEY</key>
-	<string>$(SUPABASE_ANON_KEY)</string>
-	<key>API_BASE_URL</key>
-	<string>$(API_BASE_URL)</string>
-	<key>DEBUG_ENABLED</key>
-	<string>$(DEBUG_ENABLED)</string>
-	<key>API_HOST</key>
-	<string>$(API_HOST)</string>
 </dict>
 </plist>

@@ -661,7 +661,7 @@ fastify.post('/api/v1/coins/use', async (request, reply) => {
 
 // StoreKit 2 Transaction 기반 코인 충전 엔드포인트
 fastify.post('/api/v1/coins/verify-and-charge', async (request, reply) => {
-  const { user_id, product_id, transaction_id, purchase_date, environment, verification_method } = request.body;
+  const { user_id, product_id, transaction_id, purchase_date, environment, build_environment, verification_method } = request.body;
 
   if (!user_id || !product_id || !transaction_id) {
     return reply.code(400).send({ 
@@ -701,11 +701,11 @@ fastify.post('/api/v1/coins/verify-and-charge', async (request, reply) => {
       return reply.code(500).send({ error: '거래 확인 중 오류가 발생했습니다.' });
     }
 
-    // 2. ⚠️ App Store Server API 검증 - 이제 필수!
-    const appleVerification = await verifyWithAppleServer(transaction_id);
+    // 2. ⚠️ App Store Server API 검증 - 클라이언트 환경 정보 사용
+    const appleVerification = await verifyWithAppleServer(transaction_id, build_environment);
     
     if (!appleVerification.success) {
-      fastify.log.error(`Apple 서버 검증 실패: transaction_id=${transaction_id}, error=${appleVerification.error}`);
+      fastify.log.error(`Apple 서버 검증 실패: transaction_id=${transaction_id}, error=${appleVerification.error}, build_env=${build_environment}`);
       return reply.code(400).send({ error: 'Apple 서버 검증에 실패했습니다. 유효하지 않은 거래입니다.' });
     }
 
@@ -728,14 +728,7 @@ fastify.post('/api/v1/coins/verify-and-charge', async (request, reply) => {
       return reply.code(400).send({ error: '환불된 거래입니다.' });
     }
 
-    // 3. 환경 검증 (개발/프로덕션) - Apple 서버 데이터 기준으로
-    const expectedEnvironment = process.env.NODE_ENV === 'production' ? 'Production' : 'Sandbox';
-    if (appleVerification.data.environment !== expectedEnvironment) {
-      fastify.log.error(`환경 불일치: expected=${expectedEnvironment}, apple=${appleVerification.data.environment}`);
-      return reply.code(400).send({ error: '환경 정보가 일치하지 않습니다.' });
-    }
-
-    // 4. 거래 날짜 검증 (너무 오래된 거래 차단)
+    // 3. 거래 날짜 검증 (너무 오래된 거래 차단)
     const transactionDate = new Date(appleVerification.data.purchaseDate);
     const now = new Date();
     const maxAge = 24 * 60 * 60 * 1000; // 24시간
@@ -745,17 +738,17 @@ fastify.post('/api/v1/coins/verify-and-charge', async (request, reply) => {
       return reply.code(400).send({ error: '거래가 너무 오래되었습니다.' });
     }
 
-    // 5. StoreKit 2 Transaction 검증 로깅
-    fastify.log.info(`Apple 검증 성공: user=${user_id}, product=${product_id}, transaction=${transaction_id}, env=${appleVerification.data.environment}`);
+    // 4. StoreKit 2 Transaction 검증 로깅
+    fastify.log.info(`Apple 검증 성공: user=${user_id}, product=${product_id}, transaction=${transaction_id}, env=${appleVerification.data.environment}, build_env=${build_environment}`);
 
-    // 6. Apple에서 확인된 상품 ID로 코인 수량 계산
+    // 5. Apple에서 확인된 상품 ID로 코인 수량 계산
     const coinAmount = getCoinAmountForProductId(appleVerification.data.productId);
     
     if (coinAmount === 0) {
       return reply.code(400).send({ error: '유효하지 않은 상품 ID입니다.' });
     }
 
-    // 7. 코인 충전 처리
+    // 6. 코인 충전 처리
     const chargeResult = await chargeCoinsToUser(
       user_id, 
       coinAmount, 
@@ -765,7 +758,7 @@ fastify.post('/api/v1/coins/verify-and-charge', async (request, reply) => {
     
     if (chargeResult.success) {
       // 성공 시 보안 로그
-      fastify.log.info(`코인 충전 성공: user=${user_id}, amount=${coinAmount}, transaction=${transaction_id}, balance=${chargeResult.newBalance}`);
+      fastify.log.info(`코인 충전 성공: user=${user_id}, amount=${coinAmount}, transaction=${transaction_id}, balance=${chargeResult.newBalance}, build_env=${build_environment}`);
       
       return reply.send({ 
         success: true, 
@@ -773,7 +766,8 @@ fastify.post('/api/v1/coins/verify-and-charge', async (request, reply) => {
         balance: chargeResult.newBalance,
         charged_amount: coinAmount,
         product_id: appleVerification.data.productId, // Apple에서 확인된 상품 ID 사용
-        verification_method: 'apple_server_verified'
+        verification_method: 'apple_server_verified',
+        detected_environment: appleVerification.data.environment
       });
     } else {
       return reply.code(500).send({ error: chargeResult.error });
@@ -785,8 +779,8 @@ fastify.post('/api/v1/coins/verify-and-charge', async (request, reply) => {
   }
 });
 
-// App Store Server API 검증 함수
-async function verifyWithAppleServer(transactionId) {
+// App Store Server API 검증 함수 - 클라이언트 환경 정보 활용
+async function verifyWithAppleServer(transactionId, clientBuildEnvironment = null) {
   try {
     // Apple API 인증 정보 확인 (App Store Server API 전용)
     const hasAppleAuth = (process.env.APPLE_KEY_ID || process.env.APN_KEY_ID) && 
@@ -801,17 +795,29 @@ async function verifyWithAppleServer(transactionId) {
       };
     }
 
-    // App Store Server API 엔드포인트
-    const baseUrl = process.env.NODE_ENV === 'production' 
-      ? 'https://api.storekit.itunes.apple.com'
-      : 'https://api.storekit-sandbox.itunes.apple.com';
+    // 클라이언트 환경 정보에 따른 API 엔드포인트 결정
+    let baseUrl;
+    if (clientBuildEnvironment === 'testflight' || clientBuildEnvironment === 'development') {
+      baseUrl = 'https://api.storekit-sandbox.itunes.apple.com';
+      fastify.log.info(`TestFlight/Development 환경 감지: Sandbox API 사용`);
+    } else if (clientBuildEnvironment === 'appstore') {
+      baseUrl = 'https://api.storekit.itunes.apple.com';
+      
+    } else {
+      // 클라이언트 환경 정보가 없으면 기존 로직 사용 (NODE_ENV 기반)
+      baseUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://api.storekit.itunes.apple.com'
+        : 'https://api.storekit-sandbox.itunes.apple.com';
+      
+    }
     
     const url = `${baseUrl}/inApps/v1/transactions/${transactionId}`;
     
     fastify.log.info(`Apple API 요청 시작:`, {
       url: url,
       transactionId: transactionId,
-      environment: process.env.NODE_ENV
+      clientBuildEnvironment: clientBuildEnvironment,
+      nodeEnv: process.env.NODE_ENV
     });
     
     // JWT 토큰 생성
@@ -891,7 +897,8 @@ async function verifyWithAppleServer(transactionId) {
       data: error.response?.data,
       requestUrl: error.config?.url,
       requestHeaders: error.config?.headers,
-      code: error.code
+      code: error.code,
+      clientBuildEnvironment: clientBuildEnvironment
     };
     
     fastify.log.error('Apple API 요청 중 오류:', errorDetails);

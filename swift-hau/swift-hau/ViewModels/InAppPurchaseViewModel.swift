@@ -146,6 +146,35 @@ class InAppPurchaseViewModel: ObservableObject {
         )
     }
     
+    // 빌드 환경 감지 메서드 추가
+    private func getBuildEnvironment() -> String {
+        #if DEBUG
+            return "development"
+        #else
+            if isTestFlight() {
+                return "testflight"
+            } else {
+                return "appstore"
+            }
+        #endif
+    }
+    
+    // TestFlight 감지 메서드 (복합 방법)
+    private func isTestFlight() -> Bool {
+        // 방법 1: Bundle Receipt 확인
+        if let receiptURL = Bundle.main.appStoreReceiptURL,
+           receiptURL.path.contains("sandboxReceipt") {
+            return true
+        }
+        
+        // 방법 2: Provisioning Profile 확인
+        if Bundle.main.path(forResource: "embedded", ofType: "mobileprovision") == nil {
+            return true
+        }
+        
+        return false
+    }
+    
     // StoreKit 2 Transaction 기반 코인 충전
     private func verifyReceiptAndChargeCoins(product: Product, transaction: StoreKit.Transaction, coinAmount: Int) async -> Bool {
         guard let userId = getCurrentUserId() else {
@@ -165,6 +194,9 @@ class InAppPurchaseViewModel: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
+        // 빌드 환경 감지
+        let buildEnvironment = getBuildEnvironment()
+        
         // StoreKit 2 Transaction 정보 전송
         let requestBody: [String: Any] = [
             "user_id": userId,
@@ -172,8 +204,11 @@ class InAppPurchaseViewModel: ObservableObject {
             "transaction_id": String(transaction.id),
             "purchase_date": ISO8601DateFormatter().string(from: transaction.purchaseDate),
             "environment": transaction.environment.rawValue,
+            "build_environment": buildEnvironment, // 클라이언트 빌드 환경 추가
             "verification_method": "storekit2_transaction" // 검증 방식 명시
         ]
+        
+        print("🔍 전송할 구매 정보:", requestBody)
         
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
@@ -186,6 +221,7 @@ class InAppPurchaseViewModel: ObservableObject {
                     if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                        let success = json["success"] as? Bool,
                        success {
+                        print("✅ 코인 충전 성공: \(buildEnvironment) 환경")
                         return true
                     }
                 }
