@@ -1460,13 +1460,14 @@ function checkPurchaseRateLimit(userId, transactionId) {
   return { allowed: true };
 }
 
-// 서버 시작 (포트 3000)
-fastify.listen({ port: 3000, host: '0.0.0.0' }, (err, address) => {
+// 서버 시작 (환경변수로 포트 설정)
+const PORT = process.env.PORT || 3000;
+fastify.listen({ port: parseInt(PORT), host: '0.0.0.0' }, (err, address) => {
   if (err) {
     fastify.log.error(err);
     process.exit(1);
   }
-  // fastify.log.info(`서버가 ${address} 에서 실행 중입니다.`);
+  fastify.log.info(`서버가 ${address} 에서 실행 중입니다. (포트: ${PORT})`);
 });
 
 // 서버 종료 시 APN 제공자 종료

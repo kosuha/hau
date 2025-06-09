@@ -55,9 +55,9 @@ jobs:
       - name: Build and Push Docker Image for Server
         working-directory: server
         run: |
-          # 이미지 태그 형식: ghcr.io/<소유자명>/<이미지이름>:태그
-          docker build -t ghcr.io/${{ github.repository_owner }}/my-node-server:latest .
-          docker push ghcr.io/${{ github.repository_owner }}/my-node-server:latest
+          # 새 서버 이미지만 빌드 (포트 3001) 
+          docker build -t ghcr.io/${{ github.repository_owner }}/my-node-server:v2 .
+          docker push ghcr.io/${{ github.repository_owner }}/my-node-server:v2
 
       - name: Deploy to AWS EC2
         uses: appleboy/ssh-action@v0.1.5
@@ -66,24 +66,46 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "Pulling the latest image from GitHub Container Registry..."
-            docker pull ghcr.io/${{ github.repository_owner }}/my-node-server:latest
-            echo "Stopping and removing any existing container..."
-            docker stop my-node-container || true
-            docker rm my-node-container || true
-            echo "Starting new container..."
+            echo "Pulling the latest V2 image from GitHub Container Registry..."
+            docker pull ghcr.io/${{ github.repository_owner }}/my-node-server:v2
+            
+            echo "Checking existing containers..."
+            if docker ps -q --filter "name=my-node-container-v1" | grep -q .; then
+              echo "V1 container is running - keeping it intact"
+            else
+              echo "V1 container not found - this is the first deployment"
+            fi
+            
+            echo "Stopping and removing V2 container if exists..."
+            docker stop my-node-container-v2 || true
+            docker rm my-node-container-v2 || true
+            
+            echo "Preparing key files..."
             echo '${{ secrets.APN_KEY_CONTENT }}' > /tmp/apn_key.p8
             chmod 600 /tmp/apn_key.p8
+            echo '${{ secrets.APPLE_KEY_CONTENT }}' > /tmp/apple_key.p8
+            chmod 600 /tmp/apple_key.p8
+            
+            echo "Starting V2 container (port 3001) only..."
             docker run -d \
-              -p 3000:3000 \
+              -p 3001:3001 \
               -v /tmp/apn_key.p8:/app/AuthKey.p8 \
+              -v /tmp/apple_key.p8:/app/AppleKey.p8 \
+              -e PORT=3001 \
               -e APN_KEY_PATH="AuthKey.p8" \
               -e APN_BUNDLE_ID="${{ secrets.APN_BUNDLE_ID }}" \
               -e APN_KEY_ID="${{ secrets.APN_KEY_ID }}" \
               -e APN_TEAM_ID="${{ secrets.APN_TEAM_ID }}" \
+              -e APPLE_KEY_PATH="AppleKey.p8" \
+              -e APPLE_BUNDLE_ID="${{ secrets.APPLE_BUNDLE_ID }}" \
+              -e APPLE_KEY_ID="${{ secrets.APPLE_KEY_ID }}" \
+              -e APPLE_TEAM_ID="${{ secrets.APPLE_TEAM_ID }}" \
               -e NODE_ENV="${{ secrets.NODE_ENV }}" \
               -e OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
               -e SUPABASE_KEY="${{ secrets.SUPABASE_KEY }}" \
               -e SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
-              --name my-node-container \
-              ghcr.io/${{ github.repository_owner }}/my-node-server:latest
+              --name my-node-container-v2 \
+              ghcr.io/${{ github.repository_owner }}/my-node-server:v2
+              
+            echo "V2 container deployed successfully!"
+            docker ps --filter "name=my-node-container"
