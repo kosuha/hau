@@ -65,7 +65,7 @@ struct PayView: View {
                             .foregroundColor(AppTheme.Colors.text)
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            HStack {
+                            HStack(alignment: .top) {
                                 Text("•")
                                     .foregroundColor(AppTheme.Colors.text)
                                 Text("코인을 구매해서 하우와 통화할 수 있어요.")
@@ -73,7 +73,7 @@ struct PayView: View {
                                     .foregroundColor(AppTheme.Colors.text)
                             }
                             
-                            HStack {
+                            HStack(alignment: .top) {
                                 Text("•")
                                     .foregroundColor(AppTheme.Colors.text)
                                 Text("코인은 통화시간에 따라 소모돼요.")
@@ -81,10 +81,10 @@ struct PayView: View {
                                     .foregroundColor(AppTheme.Colors.text)
                             }
                             
-                            HStack {
+                            HStack(alignment: .top) {
                                 Text("•")
                                     .foregroundColor(AppTheme.Colors.text)
-                                Text("통화시간 10분미만은 1분에 10코인, 이후 10분마다 1분에 2코인씩 추가로 소모돼요. (10+2n코인/분)")
+                                Text("통화시간 10분미만은 1분에 10코인, 이후 10분마다 1분에 2코인씩 추가로 소모돼요.\n(10분까지 10코인/분, 20분까지 12코인/분, 30분까지 14코인/분 ...)")
                                     .font(.system(size: 16))
                                     .foregroundColor(AppTheme.Colors.text)
                             }
@@ -138,51 +138,58 @@ struct PayView: View {
                             .foregroundColor(AppTheme.Colors.text)
                         
                         VStack(alignment: .leading, spacing: 6) {
-                            HStack(alignment: .center) {
+                            HStack(alignment: .top) {
                                 Text("•")
                                     .foregroundColor(AppTheme.Colors.text)
+                                    .font(.system(size: 14))
                                 Text("결제 금액에는 VAT가 포함되어 있습니다.")
                                     .font(.system(size: 14))
                                     .foregroundColor(AppTheme.Colors.text)
                             }
-                            HStack(alignment: .center) {
+                            HStack(alignment: .top) {
                                 Text("•")
                                     .foregroundColor(AppTheme.Colors.text)
+                                    .font(.system(size: 14))
                                 Text("결제 완료 후 즉시 코인이 충전됩니다.")
                                     .font(.system(size: 14))
                                     .foregroundColor(AppTheme.Colors.text)
                             }
-                            HStack(alignment: .center) {
+                            HStack(alignment: .top) {
                                 Text("•")
                                     .foregroundColor(AppTheme.Colors.text)
+                                    .font(.system(size: 14))
                                 Text("직접 구매한 코인에 대해서만 환불이 가능합니다.")
                                     .font(.system(size: 14))
                                     .foregroundColor(AppTheme.Colors.text)
                             }
-                            HStack(alignment: .center) {
+                            HStack(alignment: .top) {
                                 Text("•")
                                     .foregroundColor(AppTheme.Colors.text)
+                                    .font(.system(size: 14))
                                 Text("코인 사용 시 환불이 불가능합니다.")
                                     .font(.system(size: 14))
                                     .foregroundColor(AppTheme.Colors.text)
                             }
-                            HStack(alignment: .center) {
+                            HStack(alignment: .top) {
                                 Text("•")
                                     .foregroundColor(AppTheme.Colors.text)
+                                    .font(.system(size: 14))
                                 Text("구매한 상품은 결제일로부터 1년이내에만 사용할 수 있습니다.")
                                     .font(.system(size: 14))
                                     .foregroundColor(AppTheme.Colors.text)
                             }
-                            HStack(alignment: .center) {
+                            HStack(alignment: .top) {
                                 Text("•")
                                     .foregroundColor(AppTheme.Colors.text)
+                                    .font(.system(size: 14))
                                 Text("미성년자의 이용은 제한됩니다.")
                                     .font(.system(size: 14))
                                     .foregroundColor(AppTheme.Colors.text)
                             }
-                            HStack(alignment: .center) {
+                            HStack(alignment: .top) {
                                 Text("•")
                                     .foregroundColor(AppTheme.Colors.text)
+                                    .font(.system(size: 14))
                                 Text("AI의 품질에 대한 불만족 등 주관적인 기준에 따른 환불은 불가능합니다.")
                                     .font(.system(size: 14))
                                     .foregroundColor(AppTheme.Colors.text)
