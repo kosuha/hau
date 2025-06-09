@@ -4,7 +4,7 @@ import StoreKit
 struct PayView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var coinViewModel: CoinViewModel
-    @StateObject private var purchaseViewModel = InAppPurchaseViewModel()
+    @EnvironmentObject var purchaseViewModel: InAppPurchaseViewModel
     @State private var showPurchaseSuccessAlert = false
     @State private var purchasedCoinAmount = 0
     
@@ -37,9 +37,8 @@ struct PayView: View {
                         
                         NavigationLink(destination: PayHistoryView().environmentObject(coinViewModel)) {
                             HStack {
-                                Image(systemName: "diamond.circle.fill")
+                                AppTheme.Coin.coinIcon
                                     .font(.system(size: 24))
-                                    .foregroundColor(AppTheme.Colors.text)
                                 
                                 Spacer()
                                 
@@ -132,72 +131,25 @@ struct PayView: View {
                     }
                     
                     // 유의사항 섹션
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 16) {
                         Text("유의사항")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(size: 18, weight: .bold))
                             .foregroundColor(AppTheme.Colors.text)
                         
                         VStack(alignment: .leading, spacing: 6) {
-                            HStack(alignment: .top) {
-                                Text("•")
-                                    .foregroundColor(AppTheme.Colors.text)
-                                    .font(.system(size: 14))
-                                Text("결제 금액에는 VAT가 포함되어 있습니다.")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.Colors.text)
-                            }
-                            HStack(alignment: .top) {
-                                Text("•")
-                                    .foregroundColor(AppTheme.Colors.text)
-                                    .font(.system(size: 14))
-                                Text("결제 완료 후 즉시 코인이 충전됩니다.")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.Colors.text)
-                            }
-                            HStack(alignment: .top) {
-                                Text("•")
-                                    .foregroundColor(AppTheme.Colors.text)
-                                    .font(.system(size: 14))
-                                Text("직접 구매한 코인에 대해서만 환불이 가능합니다.")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.Colors.text)
-                            }
-                            HStack(alignment: .top) {
-                                Text("•")
-                                    .foregroundColor(AppTheme.Colors.text)
-                                    .font(.system(size: 14))
-                                Text("코인 사용 시 환불이 불가능합니다.")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.Colors.text)
-                            }
-                            HStack(alignment: .top) {
-                                Text("•")
-                                    .foregroundColor(AppTheme.Colors.text)
-                                    .font(.system(size: 14))
-                                Text("구매한 상품은 결제일로부터 1년이내에만 사용할 수 있습니다.")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.Colors.text)
-                            }
-                            HStack(alignment: .top) {
-                                Text("•")
-                                    .foregroundColor(AppTheme.Colors.text)
-                                    .font(.system(size: 14))
-                                Text("미성년자의 이용은 제한됩니다.")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.Colors.text)
-                            }
-                            HStack(alignment: .top) {
-                                Text("•")
-                                    .foregroundColor(AppTheme.Colors.text)
-                                    .font(.system(size: 14))
-                                Text("AI의 품질에 대한 불만족 등 주관적인 기준에 따른 환불은 불가능합니다.")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.Colors.text)
+                            ForEach(noticeItems, id: \.self) { item in
+                                HStack(alignment: .top) {
+                                    Text("•")
+                                        .foregroundColor(AppTheme.Colors.text)
+                                    Text(item)
+                                        .font(.system(size: 16))
+                                        .foregroundColor(AppTheme.Colors.text)
+                                }
                             }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.bottom, 16)
+
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
@@ -221,11 +173,6 @@ struct PayView: View {
         .navigationBarHidden(true)
         .onAppear {
             Task {
-                // 사용자 ID를 InAppPurchaseViewModel에 설정
-                if let userId = coinViewModel.userId {
-                    purchaseViewModel.setUserId(userId)
-                }
-                
                 await coinViewModel.fetchCoinBalance()
                 await purchaseViewModel.requestProducts()
             }
@@ -235,6 +182,17 @@ struct PayView: View {
             await purchaseViewModel.requestProducts()
         }
     }
+    
+    // 유의사항 목록
+    private let noticeItems = [
+        "결제 금액에는 VAT가 포함되어 있습니다.",
+        "결제 완료 후 즉시 코인이 충전됩니다.",
+        "직접 구매한 코인에 대해서만 환불이 가능합니다.",
+        "코인 사용 시 환불이 불가능합니다.",
+        "구매한 상품은 결제일로부터 1년이내에만 사용할 수 있습니다.",
+        "미성년자의 이용은 제한됩니다.",
+        "AI의 품질에 대한 불만족 등 주관적인 기준에 따른 환불은 불가능합니다."
+    ]
     
     // 상품 ID에 따른 코인 수량 반환
     private func getCoinAmountForProduct(_ productId: String) -> Int {
@@ -299,9 +257,9 @@ struct CoinOptionView: View {
     var body: some View {
         Button(action: onPurchase) {
             HStack {
-                Image(systemName: "diamond.circle.fill")
+                AppTheme.Coin.coinIcon
                     .font(.system(size: 24))
-                    .foregroundColor(isLoading ? AppTheme.Colors.disabled : AppTheme.Colors.text)
+                    .foregroundColor(isLoading ? AppTheme.Colors.disabled : AppTheme.Colors.coin)
                 
                 Text("\(coins)")
                     .font(.system(size: 16, weight: .bold))
@@ -346,5 +304,7 @@ struct CoinOptionView: View {
 struct PayView_Previews: PreviewProvider {
     static var previews: some View {
         PayView()
+            .environmentObject(InAppPurchaseViewModel())
+            .environmentObject(CoinViewModel())
     }
 }

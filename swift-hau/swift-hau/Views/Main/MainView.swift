@@ -10,6 +10,7 @@ import SwiftUI
 struct MainView: View {
     @EnvironmentObject var userViewModel: UserViewModel
     @StateObject private var coinViewModel = CoinViewModel()
+    @StateObject private var purchaseViewModel = InAppPurchaseViewModel()
     @State private var navigationPath = NavigationPath()
     @ObservedObject private var callManager = CallManager.shared
     @State private var showCallViewAsSheet = false
@@ -35,9 +36,8 @@ struct MainView: View {
                         Spacer()
                         
                         Button(action: { navigationPath.append(Destination.pay) }) {
-                            Image(systemName: "diamond.circle.fill")
+                            AppTheme.Coin.coinIcon
                                 .font(.system(size: 20))
-                                .foregroundColor(.white)
                             Text(coinViewModel.formattedBalance())
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.white)
@@ -195,6 +195,7 @@ struct MainView: View {
                 case .settings:
                     SettingsView()
                         .environmentObject(coinViewModel)
+                        .environmentObject(purchaseViewModel)
                 case .callTimeSetting:
                     CallTimeSettingView()
                 case .privateSettings:
@@ -202,6 +203,7 @@ struct MainView: View {
                 case .pay:
                     PayView()
                         .environmentObject(coinViewModel)
+                        .environmentObject(purchaseViewModel)
                 }
             }
             .fullScreenCover(isPresented: $showCallViewAsSheet) {
@@ -219,6 +221,7 @@ struct MainView: View {
                 // CoinViewModel 사용자 ID 설정
                 if let userId = userViewModel.userData.authId {
                     coinViewModel.setUserId(userId)
+                    purchaseViewModel.setUserId(userId)
                     Task {
                         await coinViewModel.fetchCoinBalance()
                     }
@@ -230,9 +233,10 @@ struct MainView: View {
                 
                 setupCallScreenObserver()
             }
-            .onChange(of: userViewModel.userData.authId) { newUserId in
+            .onChange(of: userViewModel.userData.authId) { oldUserId, newUserId in
                 if let userId = newUserId {
                     coinViewModel.setUserId(userId)
+                    purchaseViewModel.setUserId(userId)
                     Task {
                         // 백그라운드에서 코인 잔액 업데이트 (네비게이션에 영향 없음)
                         await coinViewModel.fetchCoinBalance()

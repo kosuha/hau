@@ -63,7 +63,7 @@ struct PrivateSettingView: View {
                                     .foregroundColor(AppTheme.Colors.dark)
                             }
                             
-                            HStack(spacing: 10) {
+                            HStack(alignment: .top, spacing: 10) {
                                 Text("•")
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundColor(AppTheme.Colors.dark)
@@ -71,7 +71,7 @@ struct PrivateSettingView: View {
                                     .font(.system(size: 16))
                                     .foregroundColor(AppTheme.Colors.dark)
                             }
-                            HStack(spacing: 10) {
+                            HStack(alignment: .top, spacing: 10) {
                                 Text("•")
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundColor(AppTheme.Colors.dark)

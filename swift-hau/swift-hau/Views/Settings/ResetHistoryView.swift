@@ -63,7 +63,7 @@ struct ResetHistoryView: View {
                 ScrollView {
                     VStack(spacing: 30) {
                         // 설명 텍스트
-                        Text("대화 내역을 초기화하면 AI 친구와의 모든 대화 기록이 삭제됩니다. 이 작업은 되돌릴 수 없습니다.")
+                        Text("대화 내역을 초기화하면 AI 친구와의 모든 대화 기록이 지워져요. 이 작업은 되돌릴 수 없어요.")
                             .font(.system(size: 16, weight: .medium))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 4)
@@ -78,15 +78,15 @@ struct ResetHistoryView: View {
                                     .foregroundColor(AppTheme.Colors.dark)
                             }
                             
-                            Text("• 초기화된 대화 내역은 복구할 수 없습니다.")
+                            Text("• 초기화된 대화 내역은 복구할 수 없어요.")
                                 .font(.system(size: 14))
                                 .foregroundColor(AppTheme.Colors.dark)
                             
-                            Text("• AI 친구는 삭제된 대화 내역을 기억하지 못합니다.")
+                            Text("• AI 친구는 삭제된 대화 내역을 기억하지 못해요.")
                                 .font(.system(size: 14))
                                 .foregroundColor(AppTheme.Colors.dark)
                                 
-                            Text("• 프로필 정보 및 기타 설정은 변경되지 않습니다.")
+                            Text("• 프로필 정보 및 기타 설정은 변경되지 않아요.")
                                 .font(.system(size: 14))
                                 .foregroundColor(AppTheme.Colors.dark)
                         }

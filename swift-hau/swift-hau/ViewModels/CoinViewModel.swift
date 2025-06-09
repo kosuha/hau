@@ -163,7 +163,7 @@ class CoinViewModel: ObservableObject {
         case "charge":
             return "충전"
         case "usage":
-            return "사용"
+            return "통화"
         case "admin_adjustment":
             return "관리자 조정"
         default:

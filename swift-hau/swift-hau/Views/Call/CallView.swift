@@ -144,6 +144,9 @@ struct CallView: View {
                 // shouldShowCallScreen이 false인 경우에만 실제 통화 종료로 간주하여 disconnect
                 if !callManager.shouldShowCallScreen {
                     disconnectAI()
+                    Task {
+                        await coinViewModel.fetchCoinBalance()
+                    }
                 }
             }
         }

@@ -10,6 +10,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var coinViewModel: CoinViewModel
+    @EnvironmentObject var purchaseViewModel: InAppPurchaseViewModel
     
     var body: some View {
         VStack(spacing: 16) {
@@ -21,13 +22,15 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 40) {
                     // 멤버십 정보
-                    NavigationLink(destination: PayView().environmentObject(coinViewModel)) {
+                    NavigationLink(destination: PayView()
+                        .environmentObject(coinViewModel)
+                        .environmentObject(purchaseViewModel)
+                    ) {
                         HStack {
-                            Image(systemName: "diamond.circle.fill")
+                            AppTheme.Coin.coinIcon
                                 .font(.system(size: 24))
-                                .foregroundColor(AppTheme.Colors.text)
                             Text("나의 코인")
-                                .font(.system(size: 18, weight: .semibold))
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(AppTheme.Colors.text)
                             
                             Spacer()
@@ -87,23 +90,23 @@ struct SettingsView: View {
                         // 기타 메뉴 아이템
                         VStack(spacing: 24) {
                             SettingsItemView(title: "문의하기", destination: AnyView(InquiryView()))
-                            Link(destination: URL(string: "https://seonhoki.notion.site/HAYT-1f58d444fd4880c488a1eb8ae7021b0d")!) {
+                            Link(destination: URL(string: "https://seonhoki.notion.site/HAU-1f58d444fd4880c488a1eb8ae7021b0d")!) {
                                 HStack {
                                     Text("이용약관")
                                         .font(.system(size: 16))
                                         .foregroundColor(AppTheme.Colors.text)
                                     Spacer()
-                                    Image(systemName: "chevron.right")
+                                    Image(systemName: "arrow.up.right")
                                         .foregroundColor(AppTheme.Colors.text)
                                 }
                             }
-                            Link(destination: URL(string: "https://seonhoki.notion.site/HAYT-1f58d444fd4880bdba79dbabcf97a8d2")!) {
+                            Link(destination: URL(string: "https://seonhoki.notion.site/HAU-1f58d444fd4880bdba79dbabcf97a8d2")!) {
                                 HStack {
                                     Text("개인정보처리방침")
                                         .font(.system(size: 16))
                                         .foregroundColor(AppTheme.Colors.text)
                                     Spacer()
-                                    Image(systemName: "chevron.right")
+                                    Image(systemName: "arrow.up.right")
                                         .foregroundColor(AppTheme.Colors.text)
                                 }
                             }
@@ -143,6 +146,8 @@ struct SettingsItemView: View {
 struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
         SettingsView()
+            .environmentObject(CoinViewModel())
+            .environmentObject(InAppPurchaseViewModel())
     }
 }
 

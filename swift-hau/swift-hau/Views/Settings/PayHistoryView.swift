@@ -78,7 +78,7 @@ struct PayHistoryItemView: View {
                     .foregroundColor(AppTheme.Colors.disabled)
                 
                 HStack {
-                    VStack(alignment: .leading) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(type)
                             .font(.system(size: 18, weight: .medium))
                             .foregroundColor(AppTheme.Colors.text)

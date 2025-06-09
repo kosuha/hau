@@ -24,6 +24,7 @@ struct AppTheme {
         static let secondaryLight = Color(hex: "#95BAA1").opacity(0.24)
         static let error = Color(hex: "#FF4500")
         static let warning = Color(hex: "#FFA500")
+        static let coin = Color(hex: "#FFBF00")
     }
     
     struct Gradients {
@@ -32,6 +33,12 @@ struct AppTheme {
             startPoint: .top,
             endPoint: .bottom
         )
+    }
+
+    struct Coin {
+        static var coinIcon: some View {
+            Image(systemName: "flame.circle").foregroundColor(AppTheme.Colors.coin)
+        }
     }
 }
 

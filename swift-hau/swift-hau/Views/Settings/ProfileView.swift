@@ -67,12 +67,12 @@ struct ProfileView: View {
                         Text("지시사항")
                             .font(.system(size: 16, weight: .medium))
                         
-                        Text("지시사항은 AI 친구의 배경지식, 역할, 행동 방식, 대화 스타일 등을 결정합니다.")
+                        Text("지시사항은 AI 친구의 배경지식, 역할, 행동 방식, 대화 스타일 등을 결정합니다. 영어로 작성하시는 것을 추천합니다.")
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.Colors.secondary)
                         
                         // 추천 지시사항
-                        VStack(alignment: .leading, spacing: 8) {                            
+                        VStack(alignment: .leading) {                            
                             // 드롭다운 셀렉트 버튼
                             Menu {
                                 // 데이터베이스에서 가져온 템플릿들로 메뉴 구성
@@ -80,8 +80,7 @@ struct ProfileView: View {
                                     Button(action: {
                                         userViewModel.selfIntroBinding.wrappedValue = content
                                     }) {
-                                        let systemImage = getSystemImageForTemplate(title)
-                                        Label(title, systemImage: systemImage)
+                                        Text(title)
                                     }
                                 }
                             } label: {
@@ -98,11 +97,10 @@ struct ProfileView: View {
                                 }
                                 .padding()
                                 .frame(maxWidth: .infinity)
-                                .background(Color.white)
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(Color.white)
+                                        .strokeBorder(Color.gray, lineWidth: 1)
                                 )
                             }
                         }
@@ -242,18 +240,5 @@ struct ProfileView: View {
             isSelfIntroFocused = false
         }
     }
-    
-    // 템플릿 제목에 따른 시스템 아이콘 반환
-    private func getSystemImageForTemplate(_ title: String) -> String {
-        switch title {
-        case "냉소적인 친구":
-            return "person.fill.questionmark"
-        case "심리학자":
-            return "brain.head.profile"
-        case "모험가 해적":
-            return "sailboat.fill"
-        default:
-            return "textformat"
-        }
-    }
 }
+
