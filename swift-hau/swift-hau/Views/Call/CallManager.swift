@@ -127,6 +127,7 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     // 통화 상태 초기화
     private func resetCallState() {
+        print("CallManager: resetCallState 호출됨 - 모든 통화 상태를 초기화합니다.")
         shouldShowCallScreen = false
         isCallActive = false
         isCallInProgress = false
@@ -134,8 +135,11 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
         
         // AI 연결 종료
         if RealtimeAIConnection.shared.isConnected {
+            print("CallManager: AI 연결을 종료합니다.")
             RealtimeAIConnection.shared.disconnect()
         }
+        
+        print("CallManager: 통화 상태 초기화 완료")
     }
     
     // 기존 endCall 메서드 (현재 활성화된 통화 종료)
@@ -410,11 +414,21 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
     
     // navigateToCallScreen 메서드 수정
     func navigateToCallScreen() {
-        // 이미 true라면 중복 설정 방지
+        print("CallManager: navigateToCallScreen 호출됨 - shouldShowCallScreen: \(shouldShowCallScreen), isCallActive: \(isCallActive), isCallInProgress: \(isCallInProgress)")
+        
+        // 이미 CallView가 표시되어 있거나 표시 중이면 중복 방지
         if shouldShowCallScreen {
+            print("CallManager: CallView가 이미 표시되어 있어 중복 호출을 방지합니다.")
             return
         }
         
+        // 통화가 진행 중이 아니라면 화면을 띄우지 않음
+        if !isCallActive && !isCallInProgress {
+            print("CallManager: 통화가 활성화되지 않아 CallView를 표시하지 않습니다.")
+            return
+        }
+        
+        print("CallManager: CallView를 표시합니다.")
         shouldShowCallScreen = true
         // 새로운 프레젠테이션 ID 생성으로 화면 갱신 트리거
         callScreenPresentationID = UUID()
@@ -439,6 +453,7 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
         if type == .voIP {
             // 이미 통화 중인 경우 새로운 통화 거부
             if isCallInProgress {
+                print("CallManager: 이미 통화 중이므로 새로운 통화를 거부합니다.")
                 completion()
                 return
             }
@@ -447,12 +462,20 @@ class CallManager: NSObject, ObservableObject, CXProviderDelegate, PKPushRegistr
             guard let uuidString = payload.dictionaryPayload["uuid"] as? String,
                   let uuid = UUID(uuidString: uuidString),
                   let handle = payload.dictionaryPayload["handle"] as? String else {
+                print("CallManager: 푸시 페이로드 정보가 유효하지 않습니다.")
                 completion()
                 return
             }
             
+            print("CallManager: VoIP 푸시 알림을 받았습니다. UUID: \(uuid), Handle: \(handle)")
+            
             // 수신 전화 표시
             reportIncomingCall(uuid: uuid, handle: handle) { success in
+                if success {
+                    print("CallManager: 수신 전화 표시가 성공했습니다.")
+                } else {
+                    print("CallManager: 수신 전화 표시가 실패했습니다.")
+                }
                 completion()
             }
         }

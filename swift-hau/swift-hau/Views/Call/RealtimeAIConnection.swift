@@ -35,11 +35,11 @@ class RealtimeAIConnection: NSObject {
     // 현재 통화 ID
     private var currentCallId: Int64?
     private var currentAuthId: String? // 사용자 인증 ID 저장
-    private var currentTransactionId: String? // 현재 통화의 거래 ID 저장
-    private var totalCoinsUsed: Int = 0 // 총 사용된 코인 수
+    private var currentTransactionId: String? = nil
+    private var totalCoinsUsed: Int = 0
     
     // 시간 기반 코인 차감 관련 변수들
-    private var callStartTime: Date?
+    private var callStartTime: Date? = nil
     private var coinDeductionTimer: Timer?
     private var elapsedMinutes: Int = 0
     private var callDurationSeconds: Int = 0  // CallView와 동기화를 위한 초 단위 카운터
@@ -83,7 +83,10 @@ class RealtimeAIConnection: NSObject {
     }
     
     // CoinViewModel 인스턴스 추가
-    private var coinViewModel: CoinViewModel?
+    private var coinViewModel: CoinViewModel? = nil
+    
+    // *** 추가: 최대 통화 시간 상수 (20분 = 1200초) ***
+    private let maxCallDurationSeconds = 1200
     
     private override init() {
         super.init()
@@ -739,6 +742,18 @@ class RealtimeAIConnection: NSObject {
     func syncCallDuration(seconds: Int) {
         // CallView에서 전달받은 시간으로 동기화
         self.callDurationSeconds = seconds
+        
+        // *** 수정: 20분 제한 체크 - 코인 부족과 동일한 방식으로 처리 ***
+        if seconds >= maxCallDurationSeconds {
+            print("⚠️ 최대 통화 시간(20분)에 도달하여 통화를 종료합니다.")
+            
+            // 메인 스레드에서 통화 종료 처리 - 코인 부족과 동일한 방식
+            DispatchQueue.main.async {
+                CallManager.shared.callError = "최대 통화 시간(20분)에 도달했습니다."
+                CallManager.shared.endCall()
+            }
+            return
+        }
         
         // 코인 차감 로직 실행
         if currentTransactionId != nil {

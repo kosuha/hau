@@ -20,6 +20,9 @@ struct CallView: View {
     // CoinViewModel 주입
     @EnvironmentObject var coinViewModel: CoinViewModel
     
+    // *** 추가: 최대 통화 시간 상수 (20분 = 1200초) - 표시용으로만 사용 ***
+    private let maxCallDurationSeconds = 1200
+    
     // 통화 준비 상태 추적
     @State private var callState: CallState = .preparing {
         didSet {
@@ -36,6 +39,7 @@ struct CallView: View {
     @State private var callTimer: Timer? = nil
     @State private var callDurationSeconds: Int = 0
     @State private var callDurationFormatted: String = "00:00"
+    // *** 19분 경고 관련 상태 변수 제거 ***
     // *** 타이머 관련 상태 변수 추가 끝 ***
     
     // *** 추가: 버튼 비활성화 상태 ***
@@ -57,17 +61,17 @@ struct CallView: View {
                     .ignoresSafeArea()
 
             VStack {
-
-                if callManager.shouldShowCallScreen {
-                    VStack(spacing: 20) {
-                        // 통화 상태
-                        switch callState {
-                        case .preparing:
-                            Text("통화 준비 중...")
-                                .font(.system(size: 20))
-                                .foregroundColor(AppTheme.Colors.lightTransparent)
-                                .padding()
-                        case .connected:
+                // CallView는 항상 표시되고, shouldShowCallScreen이 false이면 자동으로 dismiss
+                VStack(spacing: 20) {
+                    // 통화 상태
+                    switch callState {
+                    case .preparing:
+                        Text("통화 준비 중...")
+                            .font(.system(size: 20))
+                            .foregroundColor(AppTheme.Colors.lightTransparent)
+                            .padding()
+                    case .connected:
+                        VStack(spacing: 8) {
                             HStack(spacing: 10) {
                                 // 프라이빗 모드 아이콘 표시
                                 if callManager.isPrivateMode {
@@ -80,52 +84,48 @@ struct CallView: View {
                                     .font(.system(size: 20))
                                     .foregroundColor(AppTheme.Colors.lightTransparent)
                             }
+                        }
+                        .padding()
+                    case .disconnected:
+                        Text("통화 종료")
+                            .font(.system(size: 20))
+                            .foregroundColor(AppTheme.Colors.lightTransparent)
                             .padding()
-                        case .disconnected:
-                            Text("통화 종료")
-                                .font(.system(size: 20))
-                                .foregroundColor(AppTheme.Colors.lightTransparent)
-                                .padding()
-                        }
-
-                        // 통화 상대
-                        Text("하우")
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundColor(AppTheme.Colors.light)
-
-                        Spacer()
-
-                        Button(action: {
-                            // *** 수정: 버튼 비활성화 상태 설정 ***
-                            isEndingCall = true
-                            callState = .disconnected
-                            
-                            // AI 연결 해제
-                            disconnectAI()
-                            
-                            callManager.endCall()
-                        }) {
-                            Image(systemName: "phone.down.fill")
-                                .font(.system(size: 28))
-                                .foregroundColor(.white)
-                        }
-                        .disabled(isEndingCall)
-                        .padding(20)
-                        .frame(width: 84, height: 84)
-                        .background(Color.red)
-                        .opacity(isEndingCall ? 0.5 : 1.0)
-                        .foregroundColor(.white)
-                        .cornerRadius(999)
                     }
-                    .padding(40)
+
+                    // 통화 상대
+                    Text("하우")
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.light)
+
+                    Spacer()
+
+                    Button(action: {
+                        endCallAction()
+                    }) {
+                        Image(systemName: "phone.down.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(.white)
+                    }
+                    .disabled(isEndingCall)
+                    .padding(20)
+                    .frame(width: 84, height: 84)
+                    .background(Color.red)
+                    .opacity(isEndingCall ? 0.5 : 1.0)
+                    .foregroundColor(.white)
+                    .cornerRadius(999)
                 }
+                .padding(40)
             }
             .navigationBarHidden(true)
             .onAppear {
+                print("CallView: onAppear - shouldShowCallScreen: \(callManager.shouldShowCallScreen)")
+                
                 // RealtimeAIConnection에 CoinViewModel 설정
                 RealtimeAIConnection.shared.setCoinViewModel(coinViewModel)
                 
-                if callManager.shouldShowCallScreen && !isConnecting {
+                // CallView가 표시될 때 항상 초기화하고 연결 시도
+                if !isConnecting {
                     // 초기 상태를 무조건 preparing으로 설정
                     callState = .preparing
                     
@@ -134,22 +134,40 @@ struct CallView: View {
                     Task {
                         await connectAI()
                     }
-                } else if !callManager.shouldShowCallScreen {
-                    // 통화가 종료되면 AI 연결도 종료 (이 경우는 거의 없을 것으로 예상)
-                    disconnectAI()
-                    dismiss()
                 }
             }
             .onDisappear {
-                // shouldShowCallScreen이 false인 경우에만 실제 통화 종료로 간주하여 disconnect
-                if !callManager.shouldShowCallScreen {
-                    disconnectAI()
-                    Task {
-                        await coinViewModel.fetchCoinBalance()
-                    }
+                print("CallView: onDisappear")
+                // CallView가 사라질 때 AI 연결 해제
+                disconnectAI()
+                Task {
+                    await coinViewModel.fetchCoinBalance()
+                }
+            }
+            .onChange(of: callManager.shouldShowCallScreen) { oldValue, newValue in
+                // shouldShowCallScreen이 false가 되면 화면을 닫음
+                if !newValue {
+                    print("CallView: shouldShowCallScreen이 false로 변경되어 화면을 닫습니다.")
+                    dismiss()
                 }
             }
         }
+    }
+    
+    // *** 추가: 통화 종료 액션 메서드 ***
+    private func endCallAction() {
+        print("CallView: 통화 종료 버튼 클릭")
+        // *** 수정: 버튼 비활성화 상태 설정 ***
+        isEndingCall = true
+        callState = .disconnected
+        
+        // AI 연결 해제
+        disconnectAI()
+        
+        // CallManager의 통화 종료 처리
+        callManager.endCall()
+        
+        // 화면 닫기는 CallManager의 shouldShowCallScreen 변경에 의해 자동으로 처리됨
     }
     
     // MARK: - Timer Functions (추가)
@@ -161,7 +179,7 @@ struct CallView: View {
             callDurationSeconds += 1
             callDurationFormatted = formatTime(seconds: callDurationSeconds)
             
-            // RealtimeAIConnection의 시간과 동기화
+            // *** 수정: RealtimeAIConnection과 동기화만 수행 (시간 제한 체크는 RealtimeAIConnection에서 처리) ***
             RealtimeAIConnection.shared.syncCallDuration(seconds: callDurationSeconds)
         }
     }
@@ -175,6 +193,7 @@ struct CallView: View {
         stopCallTimer()
         callDurationSeconds = 0
         callDurationFormatted = "00:00"
+        // *** 상태 초기화 코드 제거 - RealtimeAIConnection에서 처리 ***
     }
     
     // 초를 "MM:SS" 형식으로 변환하는 헬퍼 함수
@@ -184,7 +203,7 @@ struct CallView: View {
         return String(format: "%02d:%02d", minutes, remainingSeconds)
     }
     // *** Timer Functions 끝 ***
-    
+
     private func getTempToken() async -> [String: Any]? {
         // 서버에 요청하여 openai 임시 토큰 발급
         var resultData: [String: Any]? = nil

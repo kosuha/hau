@@ -13,15 +13,16 @@ struct MainView: View {
     @StateObject private var purchaseViewModel = InAppPurchaseViewModel()
     @State private var navigationPath = NavigationPath()
     @ObservedObject private var callManager = CallManager.shared
-    @State private var showCallViewAsSheet = false
     @State private var showCallRequestAlert = false
     @State private var showCallErrorAlert = false
+    @State private var isCallViewPresented = false  // CallView 표시 상태 추적
     
     enum Destination: Hashable {
         case settings
         case callTimeSetting
         case privateSettings
         case pay
+        case call  // CallView를 위한 destination 추가
     }
     
     var body: some View {
@@ -196,21 +197,24 @@ struct MainView: View {
                     SettingsView()
                         .environmentObject(coinViewModel)
                         .environmentObject(purchaseViewModel)
+                        .navigationBarBackButtonHidden(true)
                 case .callTimeSetting:
                     CallTimeSettingView()
+                        .navigationBarBackButtonHidden(true)
                 case .privateSettings:
                     PrivateSettingView()
+                        .navigationBarBackButtonHidden(true)
                 case .pay:
                     PayView()
                         .environmentObject(coinViewModel)
                         .environmentObject(purchaseViewModel)
+                        .navigationBarBackButtonHidden(true)
+                case .call:
+                    CallView()
+                        .environmentObject(userViewModel)
+                        .environmentObject(coinViewModel)
+                        .navigationBarBackButtonHidden(true)
                 }
-            }
-            .fullScreenCover(isPresented: $showCallViewAsSheet) {
-                CallView()
-                    .id(callManager.callScreenPresentationID)
-                    .environmentObject(userViewModel)
-                    .environmentObject(coinViewModel)
             }
             .alert("통화 요청 완료", isPresented: $showCallRequestAlert) {
                 Button("확인", role: .cancel) { }
@@ -227,8 +231,15 @@ struct MainView: View {
                     }
                 }
                 
-                if callManager.shouldShowCallScreen {
-                    showCallViewAsSheet = true
+                // 통화 화면 표시가 필요한 경우 네비게이션
+                if callManager.shouldShowCallScreen && !isCallViewPresented {
+                    print("MainView: onAppear에서 CallView 표시")
+                    isCallViewPresented = true
+                    
+                    // CallView로 이동하면서 통화 요청 알림 닫기
+                    showCallRequestAlert = false
+                    
+                    navigationPath.append(Destination.call)
                 }
                 
                 setupCallScreenObserver()
@@ -252,11 +263,26 @@ struct MainView: View {
                     }
                 }
             }
-            .onChange(of: callManager.shouldShowCallScreen) { newValue in
-                if !newValue {
-                    showCallViewAsSheet = false
+            .onChange(of: callManager.shouldShowCallScreen) { oldValue, newValue in
+                print("MainView: shouldShowCallScreen 변경 - \(oldValue) -> \(newValue)")
+                if newValue && !isCallViewPresented {
+                    // CallView를 표시해야 하고 아직 표시되지 않은 경우
+                    print("MainView: CallView를 네비게이션 스택에 추가")
+                    isCallViewPresented = true
+                    
+                    // CallView로 이동하면서 통화 요청 알림 닫기
+                    showCallRequestAlert = false
+                    
+                    navigationPath.append(Destination.call)
+                } else if !newValue && isCallViewPresented {
+                    // CallView를 숨겨야 하고 현재 표시되어 있는 경우
+                    print("MainView: CallView를 네비게이션 스택에서 제거")
+                    isCallViewPresented = false
+                    // 마지막 destination이 call인 경우에만 제거
+                    if !navigationPath.isEmpty {
+                        navigationPath.removeLast()
+                    }
                 }
-                // newValue가 true일 때는 setupCallScreenObserver에서 처리하므로 별도 로직 필요 없음
             }
             .alert("통화 요청 오류", isPresented: $showCallErrorAlert) {
                 Button("확인", role: .cancel) { 
@@ -277,7 +303,16 @@ struct MainView: View {
             object: nil,
             queue: .main) { _ in
                 DispatchQueue.main.async {
-                    showCallViewAsSheet = true
+                    // CallView가 아직 표시되지 않은 경우에만 추가
+                    if !isCallViewPresented {
+                        print("MainView: NotificationCenter에서 CallView 표시")
+                        isCallViewPresented = true
+                        
+                        // CallView로 이동하면서 통화 요청 알림 닫기
+                        showCallRequestAlert = false
+                        
+                        navigationPath.append(Destination.call)
+                    }
                 }
             }
     }
