@@ -41,32 +41,36 @@ struct LoginScreen: View {
                         authViewModel.signInWithApple()
                     }) {
                         HStack {
-                            Image(systemName: "apple.logo")
-                                .font(.system(size: 24))
-                                .foregroundColor(.white)
-                            
-                            Text("Apple로 로그인")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.white)
+                            if authViewModel.isLoading {
+                                CircularLoadingView(color: .white)
+                            } else {
+                                Image(systemName: "apple.logo")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.white)
+                                
+                                Text("Apple로 로그인")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
                         }
                         .frame(maxWidth: .infinity)
                         .frame(height: 56)
                         .background(Color.black)
                         .cornerRadius(999)
                     }
+                    .disabled(authViewModel.isLoading)
                     
                     // Google 로그인 버튼
                     Button(action: {
                         authViewModel.signInWithGoogle()
                     }) {
                         HStack(spacing: 6) {
-                            // Image("google_logo") // 구글 로고 이미지 사용 또는 아래 커스텀 뷰 유지
-                            //     .resizable()
-                            //     .aspectRatio(contentMode: .fit)
-                            //     .frame(width: 22, height: 22)
-                            
-                            Text("Google로 시작하기")
-                                .font(.system(size: 16, weight: .bold))
+                            if authViewModel.isLoading {
+                                CircularLoadingView(color: AppTheme.Colors.dark)
+                            } else {
+                                Text("Google로 시작하기")
+                                    .font(.system(size: 16, weight: .bold))
+                            }
                         }
                         .foregroundColor(AppTheme.Colors.dark)
                         .frame(maxWidth: .infinity)
@@ -78,19 +82,11 @@ struct LoginScreen: View {
                                 .stroke(AppTheme.Colors.lightTransparent, lineWidth: 1)
                         )
                     }
+                    .disabled(authViewModel.isLoading)
                 }
                 .padding(.horizontal, 20)
                 
                 Spacer(minLength: 70)
-            }
-            
-            // 로딩 표시
-            if authViewModel.isLoading {
-                Color.black.opacity(0.4)
-                    .ignoresSafeArea()
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    .scaleEffect(2)
             }
         }
         .alert(isPresented: $showingAlert) {
@@ -105,6 +101,24 @@ struct LoginScreen: View {
                 showingAlert = true
             }
         }
+    }
+}
+
+// 커스텀 원형 로딩 아이콘
+struct CircularLoadingView: View {
+    let color: Color
+    @State private var isAnimating = false
+    
+    var body: some View {
+        Circle()
+            .trim(from: 0.0, to: 0.7)
+            .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+            .frame(width: 24, height: 24)
+            .rotationEffect(Angle(degrees: isAnimating ? 360 : 0))
+            .animation(Animation.linear(duration: 1).repeatForever(autoreverses: false), value: isAnimating)
+            .onAppear {
+                isAnimating = true
+            }
     }
 }
 

@@ -81,6 +81,8 @@ class AuthViewModel: NSObject, ObservableObject {
     
     // 애플 로그인 시작
     func signInWithApple() {
+        isLoading = true  // 로딩 상태 시작
+        
         let provider = ASAuthorizationAppleIDProvider()
         let request = provider.createRequest()
         request.requestedScopes = [.fullName, .email]
@@ -91,6 +93,7 @@ class AuthViewModel: NSObject, ObservableObject {
         
         let authController = ASAuthorizationController(authorizationRequests: [request])
         authController.delegate = self
+        authController.presentationContextProvider = self
         authController.performRequests()
     }
 
@@ -268,17 +271,29 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential else {
             print("애플 ID 인증 정보를 가져오지 못했습니다.")
+            DispatchQueue.main.async {
+                self.errorMessage = "애플 ID 인증 정보를 가져올 수 없습니다."
+                self.isLoading = false
+            }
             return
         }
         
         guard let nonce = currentNonce else {
             print("유효하지 않은 상태: nonce가 없습니다.")
+            DispatchQueue.main.async {
+                self.errorMessage = "인증 과정에서 오류가 발생했습니다."
+                self.isLoading = false
+            }
             return
         }
         
         guard let appleIDToken = appleIDCredential.identityToken,
               let idTokenString = String(data: appleIDToken, encoding: .utf8) else {
             print("ID 토큰을 가져오지 못했습니다.")
+            DispatchQueue.main.async {
+                self.errorMessage = "인증 토큰을 가져올 수 없습니다."
+                self.isLoading = false
+            }
             return
         }
         
@@ -287,8 +302,28 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        print("Apple 로그인 오류: \(error.localizedDescription)")
         DispatchQueue.main.async {
-            self.errorMessage = "애플 로그인 과정에서 오류가 발생했습니다: \(error.localizedDescription)"
+            // 사용자가 로그인을 취소한 경우는 에러 메시지를 표시하지 않음
+            if let authError = error as? ASAuthorizationError {
+                switch authError.code {
+                case .canceled:
+                    // 사용자가 취소한 경우 - 에러 메시지 표시 안 함
+                    break
+                case .failed:
+                    self.errorMessage = "애플 로그인에 실패했습니다."
+                case .invalidResponse:
+                    self.errorMessage = "애플 로그인 응답이 올바르지 않습니다."
+                case .notHandled:
+                    self.errorMessage = "애플 로그인을 처리할 수 없습니다."
+                case .unknown:
+                    self.errorMessage = "알 수 없는 오류가 발생했습니다."
+                @unknown default:
+                    self.errorMessage = "애플 로그인 과정에서 오류가 발생했습니다."
+                }
+            } else {
+                self.errorMessage = "애플 로그인 과정에서 오류가 발생했습니다: \(error.localizedDescription)"
+            }
             self.isLoading = false
         }
     }
@@ -317,15 +352,31 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                         userViewModel.fetchDataIfNeeded()
                     }
                     
+                    // CallManager에도 사용자 ID 설정하고 VoIP 설정
+                    CallManager.shared.setUserId(response.user.id.uuidString)
+                    CallManager.shared.setupVoIP()
+                    
                     self.isLoading = false
                 }
             } catch {
-                print("Supabase 애플 로그인 오류: \(error)")
                 await MainActor.run {
                     self.errorMessage = "로그인 처리 중 오류가 발생했습니다."
                     self.isLoading = false
                 }
             }
         }
+    }
+}
+
+// MARK: - ASAuthorizationControllerPresentationContextProviding
+extension AuthViewModel: ASAuthorizationControllerPresentationContextProviding {
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        // 현재 앱의 키 윈도우를 반환
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else {
+            // 대체 윈도우 생성
+            return UIWindow()
+        }
+        return window
     }
 }
