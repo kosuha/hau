@@ -45,7 +45,7 @@ struct ProfileView: View {
                         Text("별명")
                             .font(.system(size: 16, weight: .medium))
 
-                        Text("별명은 AI 친구가 당신을 부르는 이름입니다.")
+                        Text("별명은 AI 친구가 당신을 부르는 이름이에요.")
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.Colors.secondary)
                         
@@ -67,7 +67,7 @@ struct ProfileView: View {
                         Text("지시사항")
                             .font(.system(size: 16, weight: .medium))
                         
-                        Text("지시사항은 AI 친구의 배경지식, 역할, 행동 방식, 대화 스타일 등을 결정합니다. 영어로 작성하시는 것을 추천합니다.")
+                        Text("지시사항은 AI 친구의 배경지식, 역할, 행동 방식, 대화 스타일 등을 결정해요. 영어로 작성하시는 것을 추천해요.")
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.Colors.secondary)
                         
