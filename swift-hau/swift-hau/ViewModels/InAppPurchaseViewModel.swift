@@ -67,7 +67,7 @@ class InAppPurchaseViewModel: ObservableObject {
         isLoading = false
     }
     
-    // 상품 구매
+    // 상품 구매 - presentation context 개선
     func purchase(_ product: Product) async -> Bool {
         guard purchasingProductId == nil else { 
             print("⚠️ 다른 상품 구매 중이므로 새 구매 요청 차단")
@@ -78,7 +78,24 @@ class InAppPurchaseViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            let result = try await product.purchase()
+            // iPad에서 presentation context 문제 해결을 위한 옵션 설정
+            let result: Product.PurchaseResult
+            
+            // iOS 15.0 이상에서 presentation context 설정
+            if #available(iOS 15.0, *) {
+                // 현재 활성화된 윈도우 씬에서 구매 시트 표시
+                if let windowScene = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene })
+                    .first(where: { $0.activationState == .foregroundActive }) {
+                    
+                    result = try await product.purchase(confirmIn: windowScene)
+                } else {
+                    // fallback: 기본 구매 방식
+                    result = try await product.purchase()
+                }
+            } else {
+                result = try await product.purchase()
+            }
             
             switch result {
             case .success(let verification):
@@ -102,6 +119,7 @@ class InAppPurchaseViewModel: ObservableObject {
                 
             case .userCancelled:
                 // 구매 취소는 정상적인 사용자 행동이므로 에러 메시지를 표시하지 않음
+                print("사용자가 구매를 취소했습니다.")
                 purchasingProductId = nil
                 return false
                 
@@ -118,7 +136,24 @@ class InAppPurchaseViewModel: ObservableObject {
             
         } catch {
             print("💥 구매 실패: \(error)")
-            errorMessage = "구매에 실패했습니다."
+            
+            // 더 구체적인 에러 메시지 제공
+            if let storeKitError = error as? StoreKitError {
+                switch storeKitError {
+                case .userCancelled:
+                    // 사용자 취소는 에러 메시지 표시하지 않음
+                    break
+                case .networkError:
+                    errorMessage = "네트워크 연결을 확인해주세요."
+                case .systemError:
+                    errorMessage = "시스템 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+                default:
+                    errorMessage = "구매에 실패했습니다."
+                }
+            } else {
+                errorMessage = "구매에 실패했습니다."
+            }
+            
             purchasingProductId = nil
             return false
         }

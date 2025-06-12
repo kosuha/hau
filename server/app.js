@@ -748,11 +748,27 @@ fastify.post('/api/v1/coins/verify-and-charge', async (request, reply) => {
       return reply.code(400).send({ error: '유효하지 않은 상품 ID입니다.' });
     }
 
-    // 6. 코인 충전 처리
+    // 6. 코인 충전 처리 - 환경에 따른 description 설정
+    let chargeDescription = "인앱구매";
+    
+    // Apple에서 확인된 환경 정보를 기반으로 테스트/실제 결제 구분
+    if (appleVerification.data.environment === 'Sandbox') {
+      chargeDescription = "인앱구매 (Sandbox)";
+    } else if (appleVerification.data.environment === 'Production') {
+      chargeDescription = "인앱구매";
+    } else {
+      // 클라이언트 빌드 환경 정보도 활용
+      if (build_environment === 'development' || build_environment === 'testflight') {
+        chargeDescription = "인앱구매 (Testflight)";
+      } else {
+        chargeDescription = "인앱구매";
+      }
+    }
+    
     const chargeResult = await chargeCoinsToUser(
       user_id, 
       coinAmount, 
-      "인앱구매",
+      chargeDescription,
       transaction_id
     );
     

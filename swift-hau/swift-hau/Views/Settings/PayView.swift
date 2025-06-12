@@ -102,6 +102,7 @@ struct PayView: View {
                         if purchaseViewModel.isLoading && purchaseViewModel.products.isEmpty {
                             VStack(spacing: 16) {
                                 ProgressView()
+                                    .scaleEffect(1.2)
                                 Text("상품 정보를 불러오는 중...")
                                     .font(.system(size: 16))
                                     .foregroundColor(AppTheme.Colors.disabled)
@@ -122,6 +123,10 @@ struct PayView: View {
                                                 Task {
                                                     let success = await purchaseViewModel.purchase(product)
                                                     if success {
+                                                        // 구매 성공 시 햅틱 피드백
+                                                        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                                                        impactFeedback.impactOccurred()
+                                                        
                                                         // 구매 성공 시 코인 수량 저장하고 성공 알림 표시
                                                         purchasedCoinAmount = getCoinAmountForProduct(product.id)
                                                         showPurchaseSuccessAlert = true
@@ -203,8 +208,7 @@ struct PayView: View {
         "결제 금액에는 VAT가 포함되어 있습니다.",
         "결제 완료 후 즉시 코인이 충전됩니다.",
         "직접 구매한 코인에 대해서만 환불이 가능합니다.",
-        "코인 사용 시 환불이 불가능합니다.",
-        "구매한 상품은 결제일로부터 1년이내에만 사용할 수 있습니다.",
+        "구매 후 미사용 코인에 대해서만 결제일로부터 7일 이내에 환불이 가능합니다.",
         "미성년자의 이용은 제한됩니다.",
         "AI의 품질에 대한 불만족 등 주관적인 기준에 따른 환불은 불가능합니다."
     ]
@@ -291,21 +295,25 @@ struct CoinOptionView: View {
                 Spacer()
                 
                 if isLoading {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                        .frame(width: 80, height: 30)
-                } else {
-                Text(price)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
+                    HStack(spacing: 8) {
+                        Text("구매 중...")
+                            .font(.system(size: 12))
+                            .foregroundColor(AppTheme.Colors.disabled)
+                    }
                     .frame(width: 80, height: 30)
-                    .background(AppTheme.Colors.secondary)
-                    .cornerRadius(5)
-                    .fixedSize()
+                } else {
+                    Text(price)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 80, height: 30)
+                        .background(AppTheme.Colors.secondary)
+                        .cornerRadius(5)
+                        .fixedSize()
                 }
             }
             .padding(.horizontal, 20)
             .frame(height: 70)
+            .background(isLoading ? AppTheme.Colors.secondaryLight.opacity(0.5) : Color.clear)
             .cornerRadius(16)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
@@ -313,6 +321,7 @@ struct CoinOptionView: View {
             )
         }
         .disabled(isLoading || isAnyPurchasing)
+        .opacity((isLoading || isAnyPurchasing) ? 0.6 : 1.0)
     }
 }
 
