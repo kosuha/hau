@@ -82,19 +82,24 @@ fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
   }
 
   // 기본 프롬프트 가져오기
-  // const basePrompt = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf8');
+  const basePrompt = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf8');
   
   // 클라이언트에서 보낸 사용자 정보 추출
   const { user_name, self_intro, voice, history, language = 'ko' } = request.body || {};
   
-  // // 사용자 정보를 프롬프트에 추가
-  // let customPrompt = basePrompt;
-  
   // // 사용자별 맞춤형 프롬프트 작성
   // if (user_name) {
     // }
-  const customPrompt = `대화상대의 이름은 ${user_name}입니다. [instructions]과 [history]을 참고하여 대화를 진행해주세요. [instructions]에서 따로 명시되지 않은 경우, 대화는 한국어로 진행해주세요.\n`;
+  let customPrompt = `
+  대화상대의 이름은 ${user_name}입니다. 
+  [Tone of Voice], [Rhythm and Tempo], [Emotion and Delivery], [instructions], [history]을 참고하여 대화를 진행해주세요. 
+  [instructions]에서 따로 명시되지 않은 경우, 대화는 한국어로 진행해주세요. 
+  [instructions]의 지시사항은 [Tone of Voice], [Rhythm and Tempo], [Emotion and Delivery] 섹션의 지시사항보다 우선해야 합니다.
   
+  `;
+  
+  customPrompt += basePrompt;
+
   // 사용자 정보 섹션 추가
   let userInfo = "";
   userInfo += "\n[instructions]";
