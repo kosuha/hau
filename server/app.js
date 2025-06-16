@@ -92,10 +92,8 @@ fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
     // }
   let customPrompt = `
   대화상대의 이름은 ${user_name}입니다. 
-  [Tone of Voice], [Rhythm and Tempo], [Emotion and Delivery], [instructions], [history]을 참고하여 대화를 진행해주세요. 
+  [instructions], [history]을 참고하여 대화를 진행해주세요. 
   [instructions]에서 따로 명시되지 않은 경우, 대화는 한국어로 진행해주세요. 
-  [instructions]의 지시사항은 [Tone of Voice], [Rhythm and Tempo], [Emotion and Delivery] 섹션의 지시사항보다 우선해야 합니다.
-
   `;
   
   customPrompt += basePrompt;
@@ -103,7 +101,11 @@ fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
   // 사용자 정보 섹션 추가
   let userInfo = "";
   userInfo += "\n[instructions]";
-  if (self_intro) userInfo += `\n"${self_intro}"`;
+  if (self_intro && self_intro.trim() !== "") {
+    userInfo += `\n"${self_intro}"`;
+  } else {
+    userInfo += basePrompt;
+  }
   userInfo += "\n";
 
   let historyString = ""; // 새로운 변수 선언
