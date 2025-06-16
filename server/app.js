@@ -95,7 +95,7 @@ fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
   [Tone of Voice], [Rhythm and Tempo], [Emotion and Delivery], [instructions], [history]을 참고하여 대화를 진행해주세요. 
   [instructions]에서 따로 명시되지 않은 경우, 대화는 한국어로 진행해주세요. 
   [instructions]의 지시사항은 [Tone of Voice], [Rhythm and Tempo], [Emotion and Delivery] 섹션의 지시사항보다 우선해야 합니다.
-  
+
   `;
   
   customPrompt += basePrompt;
@@ -127,6 +127,7 @@ fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
       instructions: finalPrompt,
       // 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', and 'verse'
       voice: voice,
+      temperature: 0.7,
       input_audio_transcription: {
           language: language,
           model: 'whisper-1'
