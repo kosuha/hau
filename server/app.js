@@ -123,8 +123,8 @@ fastify.post('/api/v1/realtime/sessions', async (request, reply) => {
   // OpenAI API 엔드포인트 및 요청 데이터
   const url = 'https://api.openai.com/v1/realtime/sessions';
   const data = {
-      model: 'gpt-4o-realtime-preview-2025-06-03',
-      // model: 'gpt-4o-mini-realtime-preview',
+      // model: 'gpt-4o-realtime-preview-2025-06-03',
+      model: 'gpt-4o-mini-realtime-preview',
       modalities: ['audio', 'text'],
       instructions: finalPrompt,
       // 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', and 'verse'
