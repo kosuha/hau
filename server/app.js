@@ -1520,7 +1520,7 @@ fastify.post('/api/v1/kakao/chat', async (request, reply) => {
       // OpenAI API로 POST 요청 보내기
       const response = await axios.post(url, data, { headers });
 
-      console.log(response.data.output.content);
+      console.log(response.data.output[0].content);
 
       // OpenAI API 응답을 클라이언트로 전달
       const outputObject = {
@@ -1529,7 +1529,7 @@ fastify.post('/api/v1/kakao/chat', async (request, reply) => {
             "outputs": [
                 {
                     "simpleText": {
-                        "text": response.data.output.content[0].text
+                        "text": response.data.output[0].content[0].text
                     }
                 }
             ]
