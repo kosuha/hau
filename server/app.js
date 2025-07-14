@@ -1492,6 +1492,56 @@ function checkPurchaseRateLimit(userId, transactionId) {
   return { allowed: true };
 }
 
+// 카카오톡 채널 챗봇 엔드포인트
+
+// 챗봇 채팅
+fastify.post('/api/v1/kakao/chat', async (request, reply) => {
+  // OpenAI API 키 환경 변수에서 가져오기
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    reply.code(500).send({ error: 'OpenAI API 키가 설정되지 않았습니다.' });
+    return;
+  }
+  
+  console.log(request.body);
+
+
+  // // OpenAI API 엔드포인트 및 요청 데이터
+  // const url = 'https://api.openai.com/v1/realtime/sessions';
+  // const data = {
+  //     // model: 'gpt-4o-realtime-preview-2025-06-03',
+  //     model: 'gpt-4o-mini-realtime-preview',
+  //     modalities: ['audio', 'text'],
+  //     instructions: finalPrompt,
+  //     // 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', and 'verse'
+  //     voice: voice,
+  //     temperature: 0.7,
+  //     input_audio_transcription: {
+  //         language: language,
+  //         model: 'whisper-1'
+  //     }
+  // };
+  // const headers = {
+  //     'Authorization': `Bearer ${apiKey}`,
+  //     'Content-Type': 'application/json',
+  // };
+
+  // try {
+  //     // OpenAI API로 POST 요청 보내기
+  //     const response = await axios.post(url, data, { headers });
+
+  //     // OpenAI API 응답을 클라이언트로 전달
+  //     reply.send(response.data);
+  // } catch (error) {
+  //     fastify.log.error(error.response ? error.response.data : error.message); // 에러 로깅 개선
+  //     // 에러 응답 처리
+  //     reply.code(error.response ? error.response.status : 500).send({
+  //         error: 'OpenAI API 요청 중 오류가 발생했습니다.',
+  //         details: error.response ? error.response.data : error.message,
+  //     });
+  // }
+});
+
 // 서버 시작 (환경변수로 포트 설정)
 const PORT = process.env.PORT || 3000;
 fastify.listen({ port: parseInt(PORT), host: '0.0.0.0' }, (err, address) => {

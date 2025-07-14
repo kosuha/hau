@@ -8,6 +8,7 @@ struct PayView: View {
     @State private var showPurchaseSuccessAlert = false
     @State private var purchasedCoinAmount = 0
     @State private var showCallRateGuideSheet = false
+    @State private var showProductUnavailableAlert = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -108,6 +109,32 @@ struct PayView: View {
                                     .foregroundColor(AppTheme.Colors.disabled)
                             }
                             .padding(.vertical, 40)
+                        } else if purchaseViewModel.products.isEmpty && !purchaseViewModel.isLoading {
+                            // 상품 로드 완료했지만 상품이 없는 경우
+                            VStack(spacing: 16) {
+                                Image(systemName: "clock")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(AppTheme.Colors.disabled)
+                                Text("인앱구매 준비 중")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.text)
+                                Text("Apple 심사가 진행 중입니다.\n곧 구매하실 수 있습니다.")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(AppTheme.Colors.disabled)
+                                    .multilineTextAlignment(.center)
+                                
+                                Button("다시 확인") {
+                                    Task {
+                                        await purchaseViewModel.requestProducts()
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 8)
+                                .background(AppTheme.Colors.secondary)
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                            }
+                            .padding(.vertical, 40)
                         } else {
                         VStack(spacing: 12) {
                                 // App Store Connect 상품과 UI 매칭
@@ -118,10 +145,17 @@ struct PayView: View {
                                         price: displayProduct.price,
                                         isLoading: purchaseViewModel.isPurchasing(displayProduct.id),
                                         isAnyPurchasing: purchaseViewModel.purchasingProductId != nil,
+                                        isProductAvailable: displayProduct.storeProduct != nil,
                                         onPurchase: {
+                                            print("🎯 PayView: 구매 버튼 클릭됨 - 상품 ID: \(displayProduct.id)")
+                                            
                                             if let product = displayProduct.storeProduct {
+                                                print("✅ PayView: StoreKit 상품 찾음 - \(product.id)")
                                                 Task {
+                                                    print("🚀 PayView: 구매 프로세스 시작")
                                                     let success = await purchaseViewModel.purchase(product)
+                                                    print("📊 PayView: 구매 결과 - \(success)")
+                                                    
                                                     if success {
                                                         // 구매 성공 시 햅틱 피드백
                                                         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
@@ -136,6 +170,9 @@ struct PayView: View {
                                                     }
                                                     // 구매 실패나 취소 시에는 별도 처리 없이 현재 화면 유지
                                                 }
+                                            } else {
+                                                print("❌ PayView: StoreKit 상품을 찾을 수 없음 - \(displayProduct.id)")
+                                                showProductUnavailableAlert = true
                                             }
                                         }
                                     )
@@ -182,6 +219,13 @@ struct PayView: View {
             }
         }, message: {
             Text("\(purchasedCoinAmount)코인이 충전되었습니다!")
+        })
+        .alert("구매 준비 중", isPresented: $showProductUnavailableAlert, actions: {
+            Button("확인") {
+                showProductUnavailableAlert = false
+            }
+        }, message: {
+            Text("인앱구매 상품이 Apple 심사 중입니다.\n곧 구매하실 수 있습니다.")
         })
         .background(Color.white.edgesIgnoringSafeArea(.all))
         .navigationBarHidden(true)
@@ -271,6 +315,7 @@ struct CoinOptionView: View {
     let price: String
     let isLoading: Bool
     let isAnyPurchasing: Bool
+    let isProductAvailable: Bool
     let onPurchase: () -> Void
     
     var body: some View {
@@ -301,6 +346,14 @@ struct CoinOptionView: View {
                             .foregroundColor(AppTheme.Colors.disabled)
                     }
                     .frame(width: 80, height: 30)
+                } else if !isProductAvailable {
+                    Text("사용 불가")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.disabled)
+                        .frame(width: 80, height: 30)
+                        .background(AppTheme.Colors.secondaryLight)
+                        .cornerRadius(5)
+                        .fixedSize()
                 } else {
                     Text(price)
                         .font(.system(size: 14, weight: .semibold))
@@ -320,8 +373,8 @@ struct CoinOptionView: View {
                     .stroke(isLoading ? AppTheme.Colors.disabled : AppTheme.Colors.secondary, lineWidth: 1)
             )
         }
-        .disabled(isLoading || isAnyPurchasing)
-        .opacity((isLoading || isAnyPurchasing) ? 0.6 : 1.0)
+        .disabled(!isProductAvailable || isLoading || isAnyPurchasing)
+        .opacity((!isProductAvailable || isLoading || isAnyPurchasing) ? 0.6 : 1.0)
     }
 }
 
