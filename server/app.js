@@ -1503,56 +1503,44 @@ fastify.post('/api/v1/kakao/chat', async (request, reply) => {
     return;
   }
 
-  const responseData = {
-    "version": "2.0",
-    "template": {
-        "outputs": [
-            {
-                "simpleText": {
-                    "text": "간단한 텍스트 요소입니다."
+  // OpenAI API 엔드포인트 및 요청 데이터
+  const url = 'https://api.openai.com/v1/responses';
+  const data = {
+      model: 'gpt-4o-mini',
+      input: request.body.userRequest.utterance,
+  };
+  const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+  };
+
+  try {
+      // OpenAI API로 POST 요청 보내기
+      const response = await axios.post(url, data, { headers });
+
+      // OpenAI API 응답을 클라이언트로 전달
+      const outputObject = {
+        "version": "2.0",
+        "template": {
+            "outputs": [
+                {
+                    "simpleText": {
+                        "text": response.data.output.content[0].text
+                    }
                 }
-            }
-        ]
-    }
+            ]
+        }
+      }
+      reply.send(outputObject);
+
+  } catch (error) {
+      fastify.log.error(error.response ? error.response.data : error.message); // 에러 로깅 개선
+      // 에러 응답 처리
+      reply.code(error.response ? error.response.status : 500).send({
+          error: '오류가 발생했습니다.',
+          details: error.response ? error.response.data : error.message,
+      });
   }
-  
-  reply.send(responseData);
-
-
-  // // OpenAI API 엔드포인트 및 요청 데이터
-  // const url = 'https://api.openai.com/v1/realtime/sessions';
-  // const data = {
-  //     // model: 'gpt-4o-realtime-preview-2025-06-03',
-  //     model: 'gpt-4o-mini-realtime-preview',
-  //     modalities: ['audio', 'text'],
-  //     instructions: finalPrompt,
-  //     // 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', and 'verse'
-  //     voice: voice,
-  //     temperature: 0.7,
-  //     input_audio_transcription: {
-  //         language: language,
-  //         model: 'whisper-1'
-  //     }
-  // };
-  // const headers = {
-  //     'Authorization': `Bearer ${apiKey}`,
-  //     'Content-Type': 'application/json',
-  // };
-
-  // try {
-  //     // OpenAI API로 POST 요청 보내기
-  //     const response = await axios.post(url, data, { headers });
-
-  //     // OpenAI API 응답을 클라이언트로 전달
-  //     reply.send(response.data);
-  // } catch (error) {
-  //     fastify.log.error(error.response ? error.response.data : error.message); // 에러 로깅 개선
-  //     // 에러 응답 처리
-  //     reply.code(error.response ? error.response.status : 500).send({
-  //         error: 'OpenAI API 요청 중 오류가 발생했습니다.',
-  //         details: error.response ? error.response.data : error.message,
-  //     });
-  // }
 });
 
 // 서버 시작 (환경변수로 포트 설정)
