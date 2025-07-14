@@ -1502,8 +1502,21 @@ fastify.post('/api/v1/kakao/chat', async (request, reply) => {
     reply.code(500).send({ error: 'OpenAI API 키가 설정되지 않았습니다.' });
     return;
   }
+
+  const responseData = {
+    "version": "2.0",
+    "template": {
+        "outputs": [
+            {
+                "simpleText": {
+                    "text": "간단한 텍스트 요소입니다."
+                }
+            }
+        ]
+    }
+  }
   
-  console.log(request.body);
+  reply.send(responseData);
 
 
   // // OpenAI API 엔드포인트 및 요청 데이터
