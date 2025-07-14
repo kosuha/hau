@@ -1503,6 +1503,8 @@ fastify.post('/api/v1/kakao/chat', async (request, reply) => {
     return;
   }
 
+  console.log(request.body.userRequest.utterance);
+
   // OpenAI API 엔드포인트 및 요청 데이터
   const url = 'https://api.openai.com/v1/responses';
   const data = {
@@ -1517,6 +1519,8 @@ fastify.post('/api/v1/kakao/chat', async (request, reply) => {
   try {
       // OpenAI API로 POST 요청 보내기
       const response = await axios.post(url, data, { headers });
+
+      console.log(response.data);
 
       // OpenAI API 응답을 클라이언트로 전달
       const outputObject = {
